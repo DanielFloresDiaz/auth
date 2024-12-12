@@ -14,12 +14,12 @@ import (
 	"auth/internal/models"
 	"auth/internal/observability"
 	"auth/internal/security"
-
-	"github.com/sirupsen/logrus"
+	"auth/internal/utilities"
 
 	"github.com/didip/tollbooth/v5"
 	"github.com/didip/tollbooth/v5/limiter"
 	jwt "github.com/golang-jwt/jwt/v5"
+	"github.com/sirupsen/logrus"
 )
 
 type FunctionHooks map[string][]string
@@ -117,7 +117,12 @@ func (a *API) verifyCaptcha(w http.ResponseWriter, req *http.Request) (context.C
 		return ctx, nil
 	}
 
-	verificationResult, err := security.VerifyRequest(req, strings.TrimSpace(config.Security.Captcha.Secret), config.Security.Captcha.Provider)
+	body := &security.GotrueRequest{}
+	if err := retrieveRequestParams(req, body); err != nil {
+		return nil, err
+	}
+
+	verificationResult, err := security.VerifyRequest(body, utilities.GetIPAddress(req), strings.TrimSpace(config.Security.Captcha.Secret), config.Security.Captcha.Provider)
 	if err != nil {
 		return nil, internalServerError("captcha verification process failed").WithInternalError(err)
 	}

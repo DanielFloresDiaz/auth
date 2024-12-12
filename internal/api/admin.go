@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -10,6 +9,7 @@ import (
 	"auth/internal/models"
 	"auth/internal/observability"
 	"auth/internal/storage"
+	"auth/internal/utilities"
 
 	"github.com/fatih/structs"
 	"github.com/go-chi/chi/v5"
@@ -515,21 +515,17 @@ func (a *API) adminUserDelete(w http.ResponseWriter, r *http.Request) error {
 	user := getUser(ctx)
 	adminUser := getAdminUser(ctx)
 
-	var err error
+	// ShouldSoftDelete defaults to false
 	params := &adminUserDeleteParams{}
-	body, err := getBodyBytes(r)
-	if err != nil {
-		return internalServerError("Could not read body").WithInternalError(err)
-	}
-	if len(body) > 0 {
-		if err := json.Unmarshal(body, params); err != nil {
-			return badRequestError(ErrorCodeBadJSON, "Could not read params: %v", err)
+	if body, _ := utilities.GetBodyBytes(r); len(body) != 0 {
+		// we only want to parse the body if it's not empty
+		// retrieveRequestParams will handle any errors with stream
+		if err := retrieveRequestParams(r, params); err != nil {
+			return err
 		}
-	} else {
-		params.ShouldSoftDelete = false
 	}
 
-	err = a.db.Transaction(func(tx *storage.Connection) error {
+	err := a.db.Transaction(func(tx *storage.Connection) error {
 		if terr := models.NewAuditLogEntry(r, tx, adminUser, models.UserDeletedAction, "", map[string]interface{}{
 			"user_id":    user.ID,
 			"user_email": user.Email,
