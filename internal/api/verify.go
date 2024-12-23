@@ -17,6 +17,7 @@ import (
 	"auth/internal/observability"
 	"auth/internal/storage"
 	"auth/internal/utilities"
+
 	"github.com/fatih/structs"
 	"github.com/gofrs/uuid"
 	"github.com/sethvargo/go-password/password"
@@ -405,7 +406,7 @@ func (a *API) smsVerify(r *http.Request, conn *storage.Connection, user *models.
 			if terr := models.NewAuditLogEntry(r, tx, user, models.UserModifiedAction, "", nil); terr != nil {
 				return terr
 			}
-			if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "phone", user.OrganizationID.UUID, user.OrganizationID.UUID); terr != nil {
+			if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "phone", user.OrganizationID.UUID, user.ProjectID.UUID); terr != nil {
 				if !models.IsNotFoundError(terr) {
 					return terr
 				}
@@ -553,7 +554,7 @@ func (a *API) emailChangeVerify(r *http.Request, conn *storage.Connection, param
 			return terr
 		}
 
-		if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "email", user.OrganizationID.UUID, user.OrganizationID.UUID); terr != nil {
+		if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "email", user.OrganizationID.UUID, user.ProjectID.UUID); terr != nil {
 			if !models.IsNotFoundError(terr) {
 				return terr
 			}
