@@ -11,10 +11,12 @@ import (
 	"time"
 
 	mail "auth/internal/mailer"
+
 	"github.com/gofrs/uuid"
 
 	"auth/internal/conf"
 	"auth/internal/models"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -41,6 +43,28 @@ func TestSignup(t *testing.T) {
 
 func (ts *SignupTestSuite) SetupTest() {
 	models.TruncateAll(ts.API.db)
+
+	project_id := uuid.Must(uuid.NewV4())
+	// Create a project
+	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Create the admin of the organization
+	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
+	require.NoError(ts.T(), err, "Error making new user")
+	require.NoError(ts.T(), ts.API.db.Create(user, "organization_id", "organization_role"), "Error creating user")
+
+	// Create the organization if it doesn't exist
+	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
+	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Set the user as the admin of the organization
+	if err := ts.API.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
 }
 
 // TestSignup tests API /signup route
@@ -53,6 +77,7 @@ func (ts *SignupTestSuite) TestSignup() {
 		"data": map[string]interface{}{
 			"a": 1,
 		},
+		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 	}))
 
 	// Setup request
@@ -87,6 +112,7 @@ func (ts *SignupTestSuite) TestSignupTwice() {
 			"data": map[string]interface{}{
 				"a": 1,
 			},
+			"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 		}))
 	}
 
@@ -130,7 +156,7 @@ func (ts *SignupTestSuite) TestVerifySignup() {
 	now := time.Now()
 	user.ConfirmationSentAt = &now
 	require.NoError(ts.T(), err)
-	require.NoError(ts.T(), ts.API.db.Create(user))
+	require.NoError(ts.T(), ts.API.db.Create(user, "organization_role", "project_id"))
 	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, user.ID, user.GetEmail(), user.ConfirmationToken, models.ConfirmationToken))
 
 	// Find test user
