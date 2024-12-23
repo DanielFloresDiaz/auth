@@ -154,10 +154,11 @@ func (a *API) SmsOtp(w http.ResponseWriter, r *http.Request) error {
 		}
 
 		signUpParams := &SignupParams{
-			Phone:    params.Phone,
-			Password: password,
-			Data:     params.Data,
-			Channel:  params.Channel,
+			Phone:          params.Phone,
+			Password:       password,
+			Data:           params.Data,
+			Channel:        params.Channel,
+			OrganizationID: params.OrganizationID,
 		}
 		newBodyContent, err := json.Marshal(signUpParams)
 		if err != nil {
@@ -175,8 +176,9 @@ func (a *API) SmsOtp(w http.ResponseWriter, r *http.Request) error {
 			}
 
 			signUpParams := &SignupParams{
-				Phone:   params.Phone,
-				Channel: params.Channel,
+				Phone:          params.Phone,
+				Channel:        params.Channel,
+				OrganizationID: params.OrganizationID,
 			}
 			newBodyContent, err := json.Marshal(signUpParams)
 			if err != nil {
