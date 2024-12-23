@@ -184,11 +184,11 @@ func NewAPIWithVersion(globalConfig *conf.GlobalConfiguration, db *storage.Conne
 		r.With(api.limitHandler(api.limiterOpts.Resend)).
 			With(api.verifyCaptcha).Post("/resend", api.Resend)
 
-		/*r.With(api.limitHandler(api.limiterOpts.MagicLink)).
+		r.With(api.limitHandler(api.limiterOpts.MagicLink)).
 			With(api.verifyCaptcha).Post("/magiclink", api.MagicLink)
 
 		r.With(api.limitHandler(api.limiterOpts.Otp)).
-			With(api.verifyCaptcha).Post("/otp", api.Otp) */
+			With(api.verifyCaptcha).Post("/otp", api.Otp)
 
 		r.With(api.limitHandler(api.limiterOpts.Token)).
 			With(api.verifyCaptcha).Post("/token", api.Token)
