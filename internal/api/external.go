@@ -14,6 +14,7 @@ import (
 	"auth/internal/observability"
 	"auth/internal/storage"
 	"auth/internal/utilities"
+
 	"github.com/fatih/structs"
 	"github.com/gofrs/uuid"
 	jwt "github.com/golang-jwt/jwt/v5"
@@ -24,11 +25,13 @@ import (
 // ExternalProviderClaims are the JWT claims sent as the state in the external oauth provider signup flow
 type ExternalProviderClaims struct {
 	AuthMicroserviceClaims
-	Provider        string `json:"provider"`
-	InviteToken     string `json:"invite_token,omitempty"`
-	Referrer        string `json:"referrer,omitempty"`
-	FlowStateID     string `json:"flow_state_id"`
-	LinkingTargetID string `json:"linking_target_id,omitempty"`
+	Provider        string    `json:"provider"`
+	InviteToken     string    `json:"invite_token,omitempty"`
+	Referrer        string    `json:"referrer,omitempty"`
+	FlowStateID     string    `json:"flow_state_id"`
+	LinkingTargetID string    `json:"linking_target_id,omitempty"`
+	OrganizationID  uuid.UUID `json:"organization_id,omitempty"`
+	ProjectID       uuid.UUID `json:"project_id,omitempty"`
 }
 
 // ExternalProviderRedirect redirects the request to the oauth provider
@@ -79,26 +82,31 @@ func (a *API) GetExternalProviderRedirectURL(w http.ResponseWriter, r *http.Requ
 	flowType := getFlowFromChallenge(codeChallenge)
 
 	flowStateID := ""
-	if isPKCEFlow(flowType) {
-		organization := query.Get("organization_id")
-		organization_id, err := uuid.FromString(organization)
-		if err == nil {
-			query.Del("organization_id")
-		}
-		project := query.Get("project_id")
-		project_id, err2 := uuid.FromString(project)
-		if err2 == nil {
-			query.Del("project_id")
-		}
-		if err != nil && err2 != nil {
-			return "", badRequestError(ErrorCodeValidationFailed, "Invalid organization_id or project_id")
-		}
+	organization := query.Get("organization_id")
+	organization_id, err := uuid.FromString(organization)
+	if err == nil {
+		query.Del("organization_id")
+	}
+	project := query.Get("project_id")
+	project_id, err2 := uuid.FromString(project)
+	if err2 == nil {
+		query.Del("project_id")
+	}
 
+	if err != nil && err2 != nil {
+		return "", badRequestError(ErrorCodeValidationFailed, "Invalid organization_id or project_id")
+	}
+
+	if isPKCEFlow(flowType) {
 		flowState, err := generateFlowState(a.db, providerType, models.OAuth, codeChallengeMethod, codeChallenge, nil, organization_id, project_id)
 		if err != nil {
 			return "", err
 		}
 		flowStateID = flowState.ID.String()
+
+		// Clear the organization_id and project_id if the flow is PKCE
+		organization_id = uuid.Nil
+		project_id = uuid.Nil
 	}
 
 	claims := ExternalProviderClaims{
@@ -109,10 +117,12 @@ func (a *API) GetExternalProviderRedirectURL(w http.ResponseWriter, r *http.Requ
 			SiteURL:    config.SiteURL,
 			InstanceID: uuid.Nil.String(),
 		},
-		Provider:    providerType,
-		InviteToken: inviteToken,
-		Referrer:    redirectURL,
-		FlowStateID: flowStateID,
+		Provider:       providerType,
+		InviteToken:    inviteToken,
+		Referrer:       redirectURL,
+		FlowStateID:    flowStateID,
+		OrganizationID: organization_id,
+		ProjectID:      project_id,
 	}
 
 	if linkingTargetUser != nil {
@@ -216,8 +226,16 @@ func (a *API) internalExternalProviderCallback(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	organization_id := flowState.OrganizationID.UUID
-	project_id := flowState.ProjectID.UUID
+	var organization_id uuid.UUID
+	var project_id uuid.UUID
+
+	if flowState != nil {
+		organization_id = flowState.OrganizationID.UUID
+		project_id = flowState.ProjectID.UUID
+	} else {
+		organization_id = getOrganizationID(ctx)
+		project_id = getProjectID(ctx)
+	}
 
 	var user *models.User
 	var token *AccessTokenResponse
@@ -553,6 +571,12 @@ func (a *API) loadExternalState(ctx context.Context, r *http.Request) (context.C
 			return nil, internalServerError("Database error loading user").WithInternalError(err)
 		}
 		ctx = withTargetUser(ctx, u)
+	}
+	if claims.OrganizationID != uuid.Nil {
+		ctx = withOrganizationID(ctx, claims.OrganizationID)
+	}
+	if claims.ProjectID != uuid.Nil {
+		ctx = withProjectID(ctx, claims.ProjectID)
 	}
 	ctx = withExternalProviderType(ctx, claims.Provider)
 	return withSignature(ctx, state), nil
