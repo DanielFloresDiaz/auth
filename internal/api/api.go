@@ -273,10 +273,7 @@ func NewAPIWithVersion(globalConfig *conf.GlobalConfiguration, db *storage.Conne
 						r.Delete("/", api.adminUserDelete)
 					})
 				})
-				/*
-					r.Post("/generate_link", api.adminGenerateLink)
-
-				*/
+				/* r.Post("/generate_link", api.adminGenerateLink)/*
 
 				/*r.Route("/sso", func(r *router) {
 					r.Route("/providers", func(r *router) {
