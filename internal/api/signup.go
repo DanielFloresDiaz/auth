@@ -10,6 +10,7 @@ import (
 	"auth/internal/metering"
 	"auth/internal/models"
 	"auth/internal/storage"
+
 	"github.com/fatih/structs"
 	"github.com/gofrs/uuid"
 	"github.com/pkg/errors"
@@ -194,13 +195,6 @@ func (a *API) Signup(w http.ResponseWriter, r *http.Request) error {
 	err = db.Transaction(func(tx *storage.Connection) error {
 		var terr error
 		var excludeColumns []string
-		excludeColumns = append(excludeColumns, "organization_role")
-		if signupUser.OrganizationID.UUID == uuid.Nil {
-			excludeColumns = append(excludeColumns, "organization_id")
-		}
-		if signupUser.ProjectID.UUID == uuid.Nil {
-			excludeColumns = append(excludeColumns, "project_id")
-		}
 
 		if user != nil {
 			if (params.Provider == "email" && user.IsConfirmed()) || (params.Provider == "phone" && user.IsPhoneConfirmed()) {
@@ -208,6 +202,15 @@ func (a *API) Signup(w http.ResponseWriter, r *http.Request) error {
 			}
 			// do not update the user because we can't be sure of their claimed identity
 		} else {
+
+			excludeColumns = append(excludeColumns, "organization_role")
+			if signupUser.OrganizationID.UUID == uuid.Nil {
+				excludeColumns = append(excludeColumns, "organization_id")
+			}
+			if signupUser.ProjectID.UUID == uuid.Nil {
+				excludeColumns = append(excludeColumns, "project_id")
+			}
+
 			user, terr = a.signupNewUser(tx, signupUser, excludeColumns...)
 			if terr != nil {
 				return terr
