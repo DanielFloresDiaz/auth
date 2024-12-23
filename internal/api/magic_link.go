@@ -22,7 +22,6 @@ type MagicLinkParams struct {
 	CodeChallengeMethod string                 `json:"code_challenge_method"`
 	CodeChallenge       string                 `json:"code_challenge"`
 	OrganizationID      uuid.UUID              `json:"organization_id"`
-	ProjectID           uuid.UUID              `json:"project_id"`
 }
 
 func (p *MagicLinkParams) Validate(a *API) error {
@@ -136,9 +135,7 @@ func (a *API) MagicLink(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if isPKCEFlow(flowType) {
-		organization_id := params.OrganizationID
-		project_id := params.ProjectID
-		if _, err = generateFlowState(a.db, models.MagicLink.String(), models.MagicLink, params.CodeChallengeMethod, params.CodeChallenge, &user.ID, organization_id, project_id); err != nil {
+		if _, err = generateFlowState(a.db, models.MagicLink.String(), models.MagicLink, params.CodeChallengeMethod, params.CodeChallenge, &user.ID, params.OrganizationID, uuid.Nil); err != nil {
 			return err
 		}
 	}
