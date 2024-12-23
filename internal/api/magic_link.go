@@ -97,6 +97,7 @@ func (a *API) MagicLink(w http.ResponseWriter, r *http.Request) error {
 			Data:                params.Data,
 			CodeChallengeMethod: params.CodeChallengeMethod,
 			CodeChallenge:       params.CodeChallenge,
+			OrganizationID:      params.OrganizationID,
 		}
 		newBodyContent, err := json.Marshal(signUpParams)
 		if err != nil {
@@ -117,6 +118,7 @@ func (a *API) MagicLink(w http.ResponseWriter, r *http.Request) error {
 				Data:                params.Data,
 				CodeChallengeMethod: params.CodeChallengeMethod,
 				CodeChallenge:       params.CodeChallenge,
+				OrganizationID:      params.OrganizationID,
 			}
 			metadata, err := json.Marshal(newBodyContent)
 			if err != nil {
