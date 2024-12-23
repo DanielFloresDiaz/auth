@@ -46,7 +46,6 @@ type VerifyParams struct {
 	Phone          string    `json:"phone"`
 	RedirectTo     string    `json:"redirect_to"`
 	OrganizationID uuid.UUID `json:"organization_id"`
-	ProjectID      uuid.UUID `json:"project_id"`
 }
 
 func (p *VerifyParams) Validate(r *http.Request, a *API) error {
@@ -112,8 +111,8 @@ func (a *API) Verify(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 
-		if params.OrganizationID == uuid.Nil && params.ProjectID == uuid.Nil {
-			return badRequestError(ErrorCodeValidationFailed, "Organization ID or Project ID is required")
+		if params.OrganizationID == uuid.Nil {
+			return badRequestError(ErrorCodeValidationFailed, "Organization ID is required")
 		}
 		return a.verifyPost(w, r, params)
 	default:
@@ -661,15 +660,15 @@ func (a *API) verifyUserAndToken(conn *storage.Connection, params *VerifyParams,
 
 	switch params.Type {
 	case phoneChangeVerification:
-		user, err = models.FindUserByPhoneChangeAndAudience(conn, params.Phone, aud, params.OrganizationID, params.ProjectID)
+		user, err = models.FindUserByPhoneChangeAndAudience(conn, params.Phone, aud, params.OrganizationID, uuid.Nil)
 	case smsVerification:
-		user, err = models.FindUserByPhoneAndAudience(conn, params.Phone, aud, params.OrganizationID, params.ProjectID)
+		user, err = models.FindUserByPhoneAndAudience(conn, params.Phone, aud, params.OrganizationID, uuid.Nil)
 	case mail.EmailChangeVerification:
 		// Since the email change could be trigger via the implicit or PKCE flow,
 		// the query used has to also check if the token saved in the db contains the pkce_ prefix
 		user, err = models.FindUserForEmailChange(conn, params.Email, tokenHash, aud, config.Mailer.SecureEmailChangeEnabled)
 	default:
-		user, err = models.FindUserByEmailAndAudience(conn, params.Email, aud, params.OrganizationID, params.ProjectID)
+		user, err = models.FindUserByEmailAndAudience(conn, params.Email, aud, params.OrganizationID, uuid.Nil)
 	}
 
 	if err != nil {
