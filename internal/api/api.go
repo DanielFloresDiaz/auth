@@ -193,10 +193,10 @@ func NewAPIWithVersion(globalConfig *conf.GlobalConfiguration, db *storage.Conne
 		r.With(api.limitHandler(api.limiterOpts.Token)).
 			With(api.verifyCaptcha).Post("/token", api.Token)
 
-		/*r.With(api.limitHandler(api.limiterOpts.Verify)).Route("/verify", func(r *router) {
+		r.With(api.limitHandler(api.limiterOpts.Verify)).Route("/verify", func(r *router) {
 			r.Get("/", api.Verify)
 			r.Post("/", api.Verify)
-		})*/
+		})
 
 		r.With(api.requireAuthentication).Post("/logout", api.Logout)
 
