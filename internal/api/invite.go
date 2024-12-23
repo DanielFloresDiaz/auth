@@ -47,10 +47,11 @@ func (a *API) Invite(w http.ResponseWriter, r *http.Request) error {
 			}
 		} else {
 			signupParams := SignupParams{
-				Email:    params.Email,
-				Data:     params.Data,
-				Aud:      aud,
-				Provider: "email",
+				Email:          params.Email,
+				Data:           params.Data,
+				Aud:            aud,
+				Provider:       "email",
+				OrganizationID: params.OrganizationID,
 			}
 
 			// because params above sets no password, this method
@@ -61,14 +62,22 @@ func (a *API) Invite(w http.ResponseWriter, r *http.Request) error {
 				return err
 			}
 
-			user, err = a.signupNewUser(tx, user)
+			var excludeColumns []string
+			excludeColumns = append(excludeColumns, "organization_role")
+			excludeColumns = append(excludeColumns, "project_id")
+			if user.OrganizationID.UUID == uuid.Nil {
+				excludeColumns = append(excludeColumns, "organization_id")
+			}
+
+			user, err = a.signupNewUser(tx, user, excludeColumns...)
 			if err != nil {
 				return err
 			}
 			identity, err := a.createNewIdentity(tx, user, "email", structs.Map(provider.Claims{
 				Subject: user.ID.String(),
 				Email:   user.GetEmail(),
-			}))
+			}),
+				excludeColumns...)
 			if err != nil {
 				return err
 			}
