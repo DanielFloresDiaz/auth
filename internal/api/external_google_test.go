@@ -8,6 +8,7 @@ import (
 	"net/url"
 
 	"auth/internal/api/provider"
+
 	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 )
@@ -21,7 +22,10 @@ const (
 func (ts *ExternalTestSuite) TestSignupExternalGoogle() {
 	provider.ResetGoogleProvider()
 
-	req := httptest.NewRequest(http.MethodGet, "http://localhost/authorize?provider=google", nil)
+	organization_id := "123e4567-e89b-12d3-a456-426655440000"
+	provider := "google"
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s", provider, organization_id)
+	req := httptest.NewRequest(http.MethodGet, url_path, nil)
 	w := httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)
 	ts.Require().Equal(http.StatusFound, w.Code)

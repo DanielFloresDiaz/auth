@@ -17,7 +17,10 @@ const (
 
 func (ts *ExternalTestSuite) TestSignupExternalWorkOSWithConnection() {
 	connection := "test_connection_id"
-	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost/authorize?provider=workos&connection=%s", connection), nil)
+	organization_id := "123e4567-e89b-12d3-a456-426655440000"
+	provider := "workos"
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s&connection=%s", provider, organization_id, connection)
+	req := httptest.NewRequest(http.MethodGet, url_path, nil)
 	w := httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)
 	ts.Require().Equal(http.StatusFound, w.Code)
@@ -43,7 +46,10 @@ func (ts *ExternalTestSuite) TestSignupExternalWorkOSWithConnection() {
 
 func (ts *ExternalTestSuite) TestSignupExternalWorkOSWithOrganization() {
 	organization := "test_organization_id"
-	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost/authorize?provider=workos&organization=%s", organization), nil)
+	organization_id := "123e4567-e89b-12d3-a456-426655440000"
+	provider := "workos"
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s&organization=%s", provider, organization_id, organization)
+	req := httptest.NewRequest(http.MethodGet, url_path, nil)
 	w := httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)
 	ts.Require().Equal(http.StatusFound, w.Code)
@@ -68,8 +74,11 @@ func (ts *ExternalTestSuite) TestSignupExternalWorkOSWithOrganization() {
 }
 
 func (ts *ExternalTestSuite) TestSignupExternalWorkOSWithProvider() {
-	provider := "test_provider"
-	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost/authorize?provider=workos&workos_provider=%s", provider), nil)
+	workos_provider := "test_provider"
+	organization_id := "123e4567-e89b-12d3-a456-426655440000"
+	provider := "workos"
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s&workos_provider=%s", provider, organization_id, workos_provider)
+	req := httptest.NewRequest(http.MethodGet, url_path, nil)
 	w := httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)
 	ts.Require().Equal(http.StatusFound, w.Code)
@@ -80,7 +89,7 @@ func (ts *ExternalTestSuite) TestSignupExternalWorkOSWithProvider() {
 	ts.Equal(ts.Config.External.WorkOS.ClientID, []string{q.Get("client_id")})
 	ts.Equal("code", q.Get("response_type"))
 	ts.Equal("", q.Get("scope"))
-	ts.Equal(provider, q.Get("provider"))
+	ts.Equal(workos_provider, q.Get("provider"))
 
 	claims := ExternalProviderClaims{}
 	p := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Name}))

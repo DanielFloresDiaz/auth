@@ -13,6 +13,7 @@ import (
 	"auth/internal/conf"
 	"auth/internal/crypto"
 	"auth/internal/models"
+
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -40,9 +41,30 @@ func TestUser(t *testing.T) {
 func (ts *UserTestSuite) SetupTest() {
 	models.TruncateAll(ts.API.db)
 
+	project_id := uuid.Must(uuid.NewV4())
+	// Create a project
+	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Create the admin of the organization
+	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
+	require.NoError(ts.T(), err, "Error making new user")
+	require.NoError(ts.T(), ts.API.db.Create(user, "organization_id", "organization_role"), "Error creating user")
+
+	// Create the organization
+	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
+	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Set the user as the admin of the organization
+	if err := ts.API.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
 	// Create user
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.NewUser("123456789", "test@example.com", "password", ts.Config.JWT.Aud, nil, id, uuid.Nil)
+	u, err := models.NewUser("123456789", "test@example.com", "password", ts.Config.JWT.Aud, nil, organization_id, uuid.Nil)
 	require.NoError(ts.T(), err, "Error creating test user model")
 	require.NoError(ts.T(), ts.API.db.Create(u, "project_id", "organization_role"), "Error saving new test user")
 }
@@ -92,8 +114,9 @@ func (ts *UserTestSuite) TestUserUpdateEmail() {
 		{
 			desc: "User doesn't have an existing email",
 			userData: map[string]interface{}{
-				"email": "",
-				"phone": "",
+				"email":           "",
+				"phone":           "",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 			},
 			isSecureEmailChangeEnabled: false,
 			isMailerAutoconfirmEnabled: false,
@@ -102,8 +125,9 @@ func (ts *UserTestSuite) TestUserUpdateEmail() {
 		{
 			desc: "User doesn't have an existing email and double email confirmation required",
 			userData: map[string]interface{}{
-				"email": "",
-				"phone": "234567890",
+				"email":           "",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"phone":           "234567890",
 			},
 			isSecureEmailChangeEnabled: true,
 			isMailerAutoconfirmEnabled: false,
@@ -112,8 +136,9 @@ func (ts *UserTestSuite) TestUserUpdateEmail() {
 		{
 			desc: "User has an existing email",
 			userData: map[string]interface{}{
-				"email": "foo@example.com",
-				"phone": "",
+				"email":           "foo@example.com",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"phone":           "",
 			},
 			isSecureEmailChangeEnabled: false,
 			isMailerAutoconfirmEnabled: false,
@@ -122,8 +147,9 @@ func (ts *UserTestSuite) TestUserUpdateEmail() {
 		{
 			desc: "User has an existing email and double email confirmation required",
 			userData: map[string]interface{}{
-				"email": "bar@example.com",
-				"phone": "",
+				"email":           "bar@example.com",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"phone":           "",
 			},
 			isSecureEmailChangeEnabled: true,
 			isMailerAutoconfirmEnabled: false,
@@ -132,8 +158,9 @@ func (ts *UserTestSuite) TestUserUpdateEmail() {
 		{
 			desc: "Update email with mailer autoconfirm enabled",
 			userData: map[string]interface{}{
-				"email": "bar@example.com",
-				"phone": "",
+				"email":           "bar@example.com",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"phone":           "",
 			},
 			isSecureEmailChangeEnabled: true,
 			isMailerAutoconfirmEnabled: true,
@@ -142,9 +169,10 @@ func (ts *UserTestSuite) TestUserUpdateEmail() {
 		{
 			desc: "Update email with mailer autoconfirm enabled and anonymous user",
 			userData: map[string]interface{}{
-				"email":        "bar@example.com",
-				"phone":        "",
-				"is_anonymous": true,
+				"email":           "bar@example.com",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"phone":           "",
+				"is_anonymous":    true,
 			},
 			isSecureEmailChangeEnabled: true,
 			isMailerAutoconfirmEnabled: true,
@@ -170,7 +198,8 @@ func (ts *UserTestSuite) TestUserUpdateEmail() {
 
 			var buffer bytes.Buffer
 			require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
-				"email": "new@example.com",
+				"email":           "new@example.com",
+				"organization_id": c.userData["organization_id"],
 			}))
 			req := httptest.NewRequest(http.MethodPut, "http://localhost/user", &buffer)
 			req.Header.Set("Content-Type", "application/json")
@@ -207,7 +236,7 @@ func (ts *UserTestSuite) TestUserUpdatePhoneAutoconfirmEnabled() {
 
 	existingUser, err := models.NewUser("22222222", "", "", ts.Config.JWT.Aud, nil, id, uuid.Nil)
 	require.NoError(ts.T(), err)
-	require.NoError(ts.T(), ts.API.db.Create(existingUser))
+	require.NoError(ts.T(), ts.API.db.Create(existingUser, "project_id", "organization_role"), "Error saving new test user")
 
 	cases := []struct {
 		desc         string
@@ -246,7 +275,8 @@ func (ts *UserTestSuite) TestUserUpdatePhoneAutoconfirmEnabled() {
 
 			var buffer bytes.Buffer
 			require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
-				"phone": c.userData["phone"],
+				"phone":           c.userData["phone"],
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 			}))
 			req := httptest.NewRequest(http.MethodPut, "http://localhost/user", &buffer)
 			req.Header.Set("Content-Type", "application/json")
@@ -340,7 +370,11 @@ func (ts *UserTestSuite) TestUserUpdatePassword() {
 		ts.Run(c.desc, func() {
 			ts.Config.Security.UpdatePasswordRequireReauthentication = c.requireReauthentication
 			var buffer bytes.Buffer
-			require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]string{"password": c.newPassword, "nonce": c.nonce}))
+			require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]string{
+				"password":        c.newPassword,
+				"nonce":           c.nonce,
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+			}))
 
 			req := httptest.NewRequest(http.MethodPut, "http://localhost/user", &buffer)
 			req.Header.Set("Content-Type", "application/json")
@@ -403,7 +437,11 @@ func (ts *UserTestSuite) TestUserUpdatePasswordNoReauthenticationRequired() {
 		ts.Run(c.desc, func() {
 			ts.Config.Security.UpdatePasswordRequireReauthentication = c.requireReauthentication
 			var buffer bytes.Buffer
-			require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]string{"password": c.newPassword, "nonce": c.nonce}))
+			require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]string{
+				"password":        c.newPassword,
+				"nonce":           c.nonce,
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+			}))
 
 			req := httptest.NewRequest(http.MethodPut, "http://localhost/user", &buffer)
 			req.Header.Set("Content-Type", "application/json")
@@ -461,8 +499,9 @@ func (ts *UserTestSuite) TestUserUpdatePasswordReauthentication() {
 	// update password with reauthentication token
 	var buffer bytes.Buffer
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
-		"password": "newpass",
-		"nonce":    "123456",
+		"password":        "newpass",
+		"nonce":           "123456",
+		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 	}))
 
 	req = httptest.NewRequest(http.MethodPut, "http://localhost/user", &buffer)
@@ -500,8 +539,9 @@ func (ts *UserTestSuite) TestUserUpdatePasswordLogoutOtherSessions() {
 	// Login the test user to get first session
 	var buffer bytes.Buffer
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
-		"email":    u.GetEmail(),
-		"password": "password",
+		"email":           u.GetEmail(),
+		"password":        "password",
+		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 	}))
 	req := httptest.NewRequest(http.MethodPost, "http://localhost/token?grant_type=password", &buffer)
 	req.Header.Set("Content-Type", "application/json")
@@ -515,8 +555,9 @@ func (ts *UserTestSuite) TestUserUpdatePasswordLogoutOtherSessions() {
 
 	// Login test user to get second session
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
-		"email":    u.GetEmail(),
-		"password": "password",
+		"email":           u.GetEmail(),
+		"password":        "password",
+		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 	}))
 	req = httptest.NewRequest(http.MethodPost, "http://localhost/token?grant_type=password", &buffer)
 	req.Header.Set("Content-Type", "application/json")
@@ -529,7 +570,8 @@ func (ts *UserTestSuite) TestUserUpdatePasswordLogoutOtherSessions() {
 
 	// Update user's password using first session
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
-		"password": "newpass",
+		"password":        "newpass",
+		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 	}))
 
 	req = httptest.NewRequest(http.MethodPut, "http://localhost/user", &buffer)

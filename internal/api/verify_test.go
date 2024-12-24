@@ -81,7 +81,7 @@ func (ts *VerifyTestSuite) SetupTest() {
 		"email_verified": false,
 	})
 	require.NoError(ts.T(), err, "Error creating test identity model")
-	require.NoError(ts.T(), ts.API.db.Create(i), "Error saving new test identity")
+	require.NoError(ts.T(), ts.API.db.Create(i, "project_id", "organization_role"), "Error saving new test identity")
 }
 
 func (ts *VerifyTestSuite) TestVerifyPasswordRecovery() {
@@ -909,20 +909,6 @@ func (ts *VerifyTestSuite) TestVerifyValidOtp() {
 		expected
 	}{
 		{
-			desc:     "Valid SMS OTP",
-			sentTime: time.Now(),
-			body: map[string]interface{}{
-				"type":            smsVerification,
-				"token":           "123456",
-				"phone":           u.GetPhone(),
-				"organization_id": id,
-			},
-			expected: expected{
-				code:      http.StatusOK,
-				tokenHash: crypto.GenerateTokenHash(u.GetPhone(), "123456"),
-			},
-		},
-		{
 			desc:     "Valid Confirmation OTP",
 			sentTime: time.Now(),
 			body: map[string]interface{}{
@@ -940,8 +926,9 @@ func (ts *VerifyTestSuite) TestVerifyValidOtp() {
 			desc:     "Valid Signup Token Hash",
 			sentTime: time.Now(),
 			body: map[string]interface{}{
-				"type":       mail.SignupVerification,
-				"token_hash": crypto.GenerateTokenHash(u.GetEmail(), "123456"),
+				"type":            mail.SignupVerification,
+				"token_hash":      crypto.GenerateTokenHash(u.GetEmail(), "123456"),
+				"organization_id": id,
 			},
 			expected: expected{
 				code:      http.StatusOK,
@@ -1002,6 +989,20 @@ func (ts *VerifyTestSuite) TestVerifyValidOtp() {
 			expected: expected{
 				code:      http.StatusOK,
 				tokenHash: crypto.GenerateTokenHash(u.EmailChange, "123456"),
+			},
+		},
+		{
+			desc:     "Valid SMS OTP",
+			sentTime: time.Now(),
+			body: map[string]interface{}{
+				"type":            smsVerification,
+				"token":           "123456",
+				"phone":           u.GetPhone(),
+				"organization_id": id,
+			},
+			expected: expected{
+				code:      http.StatusOK,
+				tokenHash: crypto.GenerateTokenHash(u.GetPhone(), "123456"),
 			},
 		},
 		{
@@ -1117,24 +1118,28 @@ func (ts *VerifyTestSuite) TestSecureEmailChangeWithTokenHash() {
 		{
 			desc: "Secure Email Change with Token Hash (Success)",
 			firstVerificationBody: map[string]interface{}{
-				"type":       mail.EmailChangeVerification,
-				"token_hash": currentEmailChangeToken,
+				"type":            mail.EmailChangeVerification,
+				"token_hash":      currentEmailChangeToken,
+				"organization_id": id,
 			},
 			secondVerificationBody: map[string]interface{}{
-				"type":       mail.EmailChangeVerification,
-				"token_hash": newEmailChangeToken,
+				"type":            mail.EmailChangeVerification,
+				"token_hash":      newEmailChangeToken,
+				"organization_id": id,
 			},
 			expectedStatus: http.StatusOK,
 		},
 		{
 			desc: "Secure Email Change with Token Hash. Reusing a token hash twice should fail",
 			firstVerificationBody: map[string]interface{}{
-				"type":       mail.EmailChangeVerification,
-				"token_hash": currentEmailChangeToken,
+				"type":            mail.EmailChangeVerification,
+				"token_hash":      currentEmailChangeToken,
+				"organization_id": id,
 			},
 			secondVerificationBody: map[string]interface{}{
-				"type":       mail.EmailChangeVerification,
-				"token_hash": currentEmailChangeToken,
+				"type":            mail.EmailChangeVerification,
+				"token_hash":      currentEmailChangeToken,
+				"organization_id": id,
 			},
 			expectedStatus: http.StatusForbidden,
 		},
@@ -1285,8 +1290,9 @@ func (ts *VerifyTestSuite) TestVerifyValidateParams() {
 		{
 			desc: "Successful GET Verify",
 			params: &VerifyParams{
-				Type:  "signup",
-				Token: "some-token-hash",
+				Type:           "signup",
+				Token:          "some-token-hash",
+				OrganizationID: uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
 			},
 			method:   http.MethodGet,
 			expected: nil,
@@ -1294,8 +1300,9 @@ func (ts *VerifyTestSuite) TestVerifyValidateParams() {
 		{
 			desc: "Successful POST Verify (TokenHash)",
 			params: &VerifyParams{
-				Type:      "signup",
-				TokenHash: "some-token-hash",
+				Type:           "signup",
+				OrganizationID: uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				TokenHash:      "some-token-hash",
 			},
 			method:   http.MethodPost,
 			expected: nil,
@@ -1303,9 +1310,10 @@ func (ts *VerifyTestSuite) TestVerifyValidateParams() {
 		{
 			desc: "Successful POST Verify (Token)",
 			params: &VerifyParams{
-				Type:  "signup",
-				Token: "some-token",
-				Email: "email@example.com",
+				Type:           "signup",
+				Token:          "some-token",
+				OrganizationID: uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				Email:          "email@example.com",
 			},
 			method:   http.MethodPost,
 			expected: nil,
@@ -1314,8 +1322,9 @@ func (ts *VerifyTestSuite) TestVerifyValidateParams() {
 		{
 			desc: "Need to send email or phone number with token",
 			params: &VerifyParams{
-				Type:  "signup",
-				Token: "some-token",
+				Type:           "signup",
+				OrganizationID: uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				Token:          "some-token",
 			},
 			method:   http.MethodPost,
 			expected: badRequestError(ErrorCodeValidationFailed, "Only an email address or phone number should be provided on verify"),
@@ -1323,9 +1332,10 @@ func (ts *VerifyTestSuite) TestVerifyValidateParams() {
 		{
 			desc: "Cannot send both TokenHash and Token",
 			params: &VerifyParams{
-				Type:      "signup",
-				Token:     "some-token",
-				TokenHash: "some-token-hash",
+				Type:           "signup",
+				Token:          "some-token",
+				OrganizationID: uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				TokenHash:      "some-token-hash",
 			},
 			method:   http.MethodPost,
 			expected: badRequestError(ErrorCodeValidationFailed, "Verify requires either a token or a token hash"),
@@ -1333,8 +1343,9 @@ func (ts *VerifyTestSuite) TestVerifyValidateParams() {
 		{
 			desc: "No verification type specified",
 			params: &VerifyParams{
-				Token: "some-token",
-				Email: "email@example.com",
+				Token:          "some-token",
+				OrganizationID: uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				Email:          "email@example.com",
 			},
 			method:   http.MethodPost,
 			expected: badRequestError(ErrorCodeValidationFailed, "Verify requires a verification type"),

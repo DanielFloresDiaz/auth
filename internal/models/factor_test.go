@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/gofrs/uuid"
@@ -33,10 +34,31 @@ func TestFactor(t *testing.T) {
 
 func (ts *FactorTestSuite) SetupTest() {
 	TruncateAll(ts.db)
-	id := uuid.Must(uuid.NewV4())
-	user, err := NewUser("", "agenericemail@gmail.com", "secret", "test", nil, id, uuid.Nil)
+	project_id := uuid.Must(uuid.NewV4())
+	// Create a project
+	if err := ts.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Create the admin of the organization
+	user, err := NewUser("", "admin@example.com", "test", "", nil, uuid.Nil, project_id)
+	require.NoError(ts.T(), err, "Error making new user")
+	require.NoError(ts.T(), ts.db.Create(user, "organization_id", "organization_role"), "Error creating user")
+
+	// Create the organization
+	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
+	if err := ts.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Set the user as the admin of the organization
+	if err := ts.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
+	user, err = NewUser("", "agenericemail@gmail.com", "secret", "test", nil, organization_id, uuid.Nil)
 	require.NoError(ts.T(), err)
-	require.NoError(ts.T(), ts.db.Create(user, "project_id"))
+	require.NoError(ts.T(), ts.db.Create(user, "project_id", "organization_role"))
 
 	factor := NewTOTPFactor(user, "asimplename")
 	require.NoError(ts.T(), factor.SetSecret("topsecret", false, "", ""))

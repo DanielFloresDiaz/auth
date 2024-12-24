@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,6 +11,7 @@ import (
 
 	"auth/internal/conf"
 	"auth/internal/models"
+
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,9 +40,30 @@ func TestRecover(t *testing.T) {
 func (ts *RecoverTestSuite) SetupTest() {
 	models.TruncateAll(ts.API.db)
 
+	project_id := uuid.Must(uuid.NewV4())
+	// Create a project
+	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Create the admin of the organization
+	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
+	require.NoError(ts.T(), err, "Error making new user")
+	require.NoError(ts.T(), ts.API.db.Create(user, "organization_id", "organization_role"), "Error creating user")
+
+	// Create the organization
+	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
+	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Set the user as the admin of the organization
+	if err := ts.API.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
 	// Create user
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.NewUser("", "test@example.com", "password", ts.Config.JWT.Aud, nil, id, uuid.Nil)
+	u, err := models.NewUser("", "test@example.com", "password", ts.Config.JWT.Aud, nil, organization_id, uuid.Nil)
 	require.NoError(ts.T(), err, "Error creating test user model")
 	require.NoError(ts.T(), ts.API.db.Create(u, "project_id", "organization_role"), "Error saving new test user")
 }
@@ -55,7 +78,8 @@ func (ts *RecoverTestSuite) TestRecover_FirstRecovery() {
 	// Request body
 	var buffer bytes.Buffer
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
-		"email": "test@example.com",
+		"email":           "test@example.com",
+		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 	}))
 
 	// Setup request
@@ -84,7 +108,8 @@ func (ts *RecoverTestSuite) TestRecover_NoEmailSent() {
 	// Request body
 	var buffer bytes.Buffer
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
-		"email": "test@example.com",
+		"email":           "test@example.com",
+		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 	}))
 
 	// Setup request
@@ -116,7 +141,8 @@ func (ts *RecoverTestSuite) TestRecover_NewEmailSent() {
 	// Request body
 	var buffer bytes.Buffer
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
-		"email": "test@example.com",
+		"email":           "test@example.com",
+		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 	}))
 
 	// Setup request
@@ -144,7 +170,8 @@ func (ts *RecoverTestSuite) TestRecover_NoSideChannelLeak() {
 	// Request body
 	var buffer bytes.Buffer
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
-		"email": email,
+		"email":           email,
+		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 	}))
 
 	// Setup request
