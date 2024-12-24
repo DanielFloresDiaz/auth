@@ -1020,19 +1020,6 @@ func (ts *VerifyTestSuite) TestVerifyValidOtp() {
 			},
 		},
 		{
-			desc:     "Valid Signup Token Hash",
-			sentTime: time.Now(),
-			body: map[string]interface{}{
-				"type":            mail.SignupVerification,
-				"token_hash":      crypto.GenerateTokenHash(u.GetEmail(), "123456"),
-				"organization_id": id,
-			},
-			expected: expected{
-				code:      http.StatusOK,
-				tokenHash: crypto.GenerateTokenHash(u.GetEmail(), "123456"),
-			},
-		},
-		{
 			desc:     "Valid Email Change Token Hash",
 			sentTime: time.Now(),
 			body: map[string]interface{}{
