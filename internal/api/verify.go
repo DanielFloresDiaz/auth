@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -85,6 +86,10 @@ func (p *VerifyParams) Validate(r *http.Request, a *API) error {
 				return badRequestError(ErrorCodeValidationFailed, "Only the token_hash and type should be provided")
 			}
 		}
+
+		if p.OrganizationID == uuid.Nil {
+			return badRequestError(ErrorCodeValidationFailed, "Organization ID is required")
+		}
 	default:
 		return nil
 	}
@@ -109,10 +114,6 @@ func (a *API) Verify(w http.ResponseWriter, r *http.Request) error {
 		}
 		if err := params.Validate(r, a); err != nil {
 			return err
-		}
-
-		if params.OrganizationID == uuid.Nil {
-			return badRequestError(ErrorCodeValidationFailed, "Organization ID is required")
 		}
 		return a.verifyPost(w, r, params)
 	default:
@@ -342,7 +343,7 @@ func (a *API) signupVerify(r *http.Request, ctx context.Context, conn *storage.C
 		// we still check for the length of the identities slice to be safe.
 		if len(user.Identities) != 0 {
 			if len(user.Identities) > 1 {
-				return internalServerError("User has more than one identity on signup")
+				return internalServerError(fmt.Sprintf("User has more than one identity on signup: %v", user.Identities))
 			}
 			emailIdentity := user.Identities[0]
 			if emailIdentity.Email != user.Email {
