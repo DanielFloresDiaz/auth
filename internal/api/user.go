@@ -57,8 +57,8 @@ func (a *API) validateUserUpdateParams(ctx context.Context, p *UserUpdateParams)
 		}
 	}
 
-	if p.OrganizationID == uuid.Nil {
-		return badRequestError(ErrorCodeValidationFailed, "Organization ID is required")
+	if p.OrganizationID == uuid.Nil && p.ProjectID == uuid.Nil {
+		return badRequestError(ErrorCodeValidationFailed, "Organization or project ID is required")
 	}
 
 	return nil
