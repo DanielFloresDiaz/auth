@@ -111,6 +111,7 @@ type AccessTokenClaims struct {
 	SessionId                     string                 `json:"session_id,omitempty"`
 	IsAnonymous                   bool                   `json:"is_anonymous"`
 	OrganizationID                uuid.UUID              `json:"organization_id"`
+	ProjectID                     uuid.UUID              `json:"project_id"`
 	OrganizationRole              string                 `json:"organization_role"`
 	TierModel                     string                 `json:"tier_model"`
 	TierTime                      string                 `json:"tier_time"`
