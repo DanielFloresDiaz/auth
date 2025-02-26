@@ -17,20 +17,30 @@ services:
       - ./:/go/src/github.com/supabase/auth
     command: CompileDaemon --build="make build" --directory=/go/src/github.com/supabase/auth --recursive=true -pattern="(.+\.go|.+\.env)" -exclude=auth -exclude=auth-arm64 -exclude=.env --command="/go/src/github.com/supabase/auth/auth -c=.env.docker"
   postgres:
+    env_file: .env
     build:
       context: .
       dockerfile: Dockerfile.postgres.dev
     container_name: auth_postgres
     ports:
-      - '5432:5432'
+      - '${DB_PORT}:5432'
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - auth_data:/var/lib/postgresql/data
     restart: always
+
+  liquibase:
+    env_file: .env
+    image: liquibase/liquibase
+    depends_on:
+      - auth
+    volumes:
+      - ./migrations:/liquibase/changelog
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=root
-      - POSTGRES_DB=postgres
-      # sets the schema name, this should match the `NAMESPACE` env var set in your .env file
-      - DB_NAMESPACE=auth
+      LIQUIBASE_COMMAND_URL: jdbc:postgresql://postgres:5432/${DB_NAME}
+      LIQUIBASE_COMMAND_USERNAME: ${AUTH_DB_ADMIN}
+      LIQUIBASE_COMMAND_PASSWORD: ${AUTH_DB_ADMIN_PASSWORD}
+      LIQUIBASE_SEARCH_PATH: /liquibase/changelog
+    command: sh -c "sleep 40 && sh /liquibase/changelog/liquibase_migrations.sh"
+
 volumes:
-  postgres_data:
+  auth_data:
