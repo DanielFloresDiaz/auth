@@ -6,7 +6,7 @@ ifdef RELEASE_VERSION
 	FLAGS=-ldflags "-X github.com/supabase/auth/internal/utilities.Version=v$(RELEASE_VERSION)" -buildvcs=false
 endif
 
-DEV_DOCKER_COMPOSE:=docker-compose-dev.yml
+DEV_DOCKER_COMPOSE:=docker-compose.yml
 
 help: ## Show this help.
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {sub("\\\\n",sprintf("\n%22c"," "), $$2);printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
