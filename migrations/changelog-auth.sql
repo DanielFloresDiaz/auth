@@ -285,27 +285,10 @@ COMMENT ON INDEX "auth".users_email_partial_key IS 'auth: a partial unique index
 --rollback DROP INDEX "auth".users_email_partial_key;
 
 --changeset solomon.auth-rls:1 labels:auth context:auth
---comment: Enable rls and create policies for api_keys
+--comment: Enable rls and create policy for api_keys
 ALTER TABLE "auth".api_keys ENABLE ROW LEVEL SECURITY;
 CREATE POLICY api_keys_policy ON "auth".api_keys
-FOR SELECT
-TO PUBLIC
-USING (
-	organization_id = current_setting('app.current_organization_id')::uuid
-	OR (
-		project_id = current_setting('app.current_project_id')::uuid
-		AND (current_user = 'brawler_admin' OR current_user = 'zion_admin')
-	)
-);
-CREATE POLICY api_keys_insert_policy ON "auth".api_keys
-FOR INSERT
-TO PUBLIC
-WITH CHECK (
-	organization_id = current_setting('app.current_organization_id')::uuid
-	OR project_id = current_setting('app.current_project_id')::uuid
-);
-CREATE POLICY api_keys_update_policy ON "auth".api_keys
-FOR UPDATE
+FOR ALL
 TO PUBLIC
 USING (
 	organization_id = current_setting('app.current_organization_id')::uuid
@@ -318,20 +301,7 @@ WITH CHECK (
 	organization_id = current_setting('app.current_organization_id')::uuid
 	OR project_id = current_setting('app.current_project_id')::uuid
 );
-CREATE POLICY api_keys_delete_policy ON "auth".api_keys
-FOR DELETE
-TO PUBLIC
-USING (
-	organization_id = current_setting('app.current_organization_id')::uuid
-	OR (
-		project_id = current_setting('app.current_project_id')::uuid
-		AND (current_user = 'brawler_admin' OR current_user = 'zion_admin')
-	)
-);
 --rollback DROP POLICY api_keys_policy ON "auth".api_keys;
---rollback DROP POLICY api_keys_insert_policy ON "auth".api_keys;
---rollback DROP POLICY api_keys_update_policy ON "auth".api_keys;
---rollback DROP POLICY api_keys_delete_policy ON "auth".api_keys;
 
 --changeset solomon.auth:grant:1 labels:auth context:auth
 --comment: grant select, insert, update, delete on all api_keys in schema auth to users: zion_admin, zion_user, brawler_admin, brawler_user
