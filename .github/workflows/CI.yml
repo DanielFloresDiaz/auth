@@ -86,7 +86,7 @@ jobs:
         with:
           changelogFile: 'liquibase-changelog.sql'
           url: 'jdbc:postgresql://postgres:5432/postgres'
-          username: 'postgres'
+          username: 'supabase_auth_admin'
           password: 'root'
           rollbackOnError: 'true'
       - name: Lint and test
