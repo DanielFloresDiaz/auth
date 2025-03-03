@@ -59,6 +59,7 @@ func (a *API) requestOrganizationID(ctx context.Context, r *http.Request) uuid.U
 	return uuid.Nil
 }
 
+//lint:ignore U1000 This function is kept for API completeness and future use
 func (a *API) requestProjectID(ctx context.Context, r *http.Request) uuid.UUID {
 	claims := getClaims(ctx)
 	if claims != nil {

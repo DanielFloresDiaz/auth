@@ -245,10 +245,12 @@ func getOAuthVerifier(ctx context.Context) string {
 	return obj.(string)
 }
 
+//lint:ignore U1000 This function is kept for API completeness and future use
 func withSSOProvider(ctx context.Context, provider *models.SSOProvider) context.Context {
 	return context.WithValue(ctx, ssoProviderKey, provider)
 }
 
+//lint:ignore U1000 This function is kept for API completeness and future use
 func getSSOProvider(ctx context.Context) *models.SSOProvider {
 	obj := ctx.Value(ssoProviderKey)
 	if obj == nil {

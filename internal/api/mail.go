@@ -48,6 +48,7 @@ type GenerateLinkResponse struct {
 	RedirectTo       string `json:"redirect_to"`
 }
 
+//lint:ignore U1000 This function is kept for API completeness and future use
 func (a *API) adminGenerateLink(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	db := a.db.WithContext(ctx)

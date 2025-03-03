@@ -273,6 +273,7 @@ func (ts *MailTestSuite) TestValidateEmail() {
 // 	ts.API.config.Mailer.ExternalHosts = originalHosts
 // }
 
+//lint:ignore U1000 This function is kept for API completeness and future use
 func (ts *MailTestSuite) setURIAllowListMap(uris ...string) {
 	for _, uri := range uris {
 		g := glob.MustCompile(uri, '.', '/')
