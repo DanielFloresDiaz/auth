@@ -13,6 +13,7 @@ import (
 	"auth/internal/conf"
 	"auth/internal/crypto"
 	"auth/internal/models"
+
 	"github.com/gofrs/uuid"
 	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
@@ -43,6 +44,28 @@ func TestInvite(t *testing.T) {
 
 func (ts *InviteTestSuite) SetupTest() {
 	models.TruncateAll(ts.API.db)
+
+	project_id := uuid.Must(uuid.NewV4())
+	// Create a project
+	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Create the admin of the organization
+	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
+	require.NoError(ts.T(), err, "Error making new user")
+	require.NoError(ts.T(), ts.API.db.Create(user, "organization_id", "organization_role"), "Error creating user")
+
+	// Create the organization
+	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
+	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Set the user as the admin of the organization
+	if err := ts.API.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
 
 	// Setup response recorder with super admin privileges
 	ts.token = ts.makeSuperAdmin("")
@@ -89,6 +112,7 @@ func (ts *InviteTestSuite) TestInvite() {
 		"data": map[string]interface{}{
 			"a": 1,
 		},
+		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 	}))
 
 	// Setup request
@@ -113,6 +137,7 @@ func (ts *InviteTestSuite) TestInviteAfterSignupShouldNotReturnSensitiveFields()
 		"data": map[string]interface{}{
 			"a": 1,
 		},
+		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 	}))
 
 	// Setup request
@@ -132,6 +157,7 @@ func (ts *InviteTestSuite) TestInviteAfterSignupShouldNotReturnSensitiveFields()
 		"data": map[string]interface{}{
 			"a": 1,
 		},
+		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 	}))
 
 	// Setup request
@@ -160,6 +186,7 @@ func (ts *InviteTestSuite) TestInvite_WithoutAccess() {
 		"data": map[string]interface{}{
 			"a": 1,
 		},
+		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 	}))
 
 	// Setup request
@@ -184,10 +211,11 @@ func (ts *InviteTestSuite) TestVerifyInvite() {
 			"Verify invite with password",
 			"test@example.com",
 			map[string]interface{}{
-				"email":    "test@example.com",
-				"type":     "invite",
-				"token":    "asdf",
-				"password": "testing",
+				"email":           "test@example.com",
+				"type":            "invite",
+				"token":           "asdf",
+				"password":        "testing",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 			},
 			http.StatusOK,
 		},
@@ -195,9 +223,10 @@ func (ts *InviteTestSuite) TestVerifyInvite() {
 			"Verify invite with no password",
 			"test1@example.com",
 			map[string]interface{}{
-				"email": "test1@example.com",
-				"type":  "invite",
-				"token": "asdf",
+				"email":           "test1@example.com",
+				"type":            "invite",
+				"token":           "asdf",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 			},
 			http.StatusOK,
 		},
@@ -213,7 +242,7 @@ func (ts *InviteTestSuite) TestVerifyInvite() {
 			user.EncryptedPassword = nil
 			user.ConfirmationToken = crypto.GenerateTokenHash(c.email, c.requestBody["token"].(string))
 			require.NoError(ts.T(), err)
-			require.NoError(ts.T(), ts.API.db.Create(user))
+			require.NoError(ts.T(), ts.API.db.Create(user, "project_id", "organization_role"))
 			require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, user.ID, user.GetEmail(), user.ConfirmationToken, models.ConfirmationToken))
 
 			// Find test user
@@ -286,7 +315,10 @@ func (ts *InviteTestSuite) TestInviteExternalGitlab() {
 	require.NoError(ts.T(), err)
 
 	// get redirect url w/ state
-	req = httptest.NewRequest(http.MethodGet, "http://localhost/authorize?provider=gitlab&invite_token="+user.ConfirmationToken, nil)
+	organization_id := "123e4567-e89b-12d3-a456-426655440000"
+	provider := "gitlab"
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s&invite_token=%s", provider, organization_id, user.ConfirmationToken)
+	req = httptest.NewRequest(http.MethodGet, url_path, nil)
 	w = httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)
 	ts.Require().Equal(http.StatusFound, w.Code)
@@ -380,7 +412,10 @@ func (ts *InviteTestSuite) TestInviteExternalGitlab_MismatchedEmails() {
 	require.NoError(ts.T(), err)
 
 	// get redirect url w/ state
-	req = httptest.NewRequest(http.MethodGet, "http://localhost/authorize?provider=gitlab&invite_token="+user.ConfirmationToken, nil)
+	organization_id := "123e4567-e89b-12d3-a456-426655440000"
+	provider := "gitlab"
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s&invite_token=%s", provider, organization_id, user.ConfirmationToken)
+	req = httptest.NewRequest(http.MethodGet, url_path, nil)
 	w = httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)
 	ts.Require().Equal(http.StatusFound, w.Code)

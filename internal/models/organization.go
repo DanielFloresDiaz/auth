@@ -25,6 +25,12 @@ type Organization struct {
 	UpdatedAt       time.Time `json:"updated_at" db:"updated_at"`
 }
 
+// TableName overrides the table name used by pop
+func (Organization) TableName() string {
+	tableName := "organizations"
+	return tableName
+}
+
 func findOrganization(tx *storage.Connection, query string, args ...interface{}) (*Organization, error) {
 	obj := &Organization{}
 	if err := tx.Eager().Q().Where(query, args...).First(obj); err != nil {

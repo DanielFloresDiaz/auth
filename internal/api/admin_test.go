@@ -12,6 +12,7 @@ import (
 
 	"auth/internal/conf"
 	"auth/internal/models"
+
 	"github.com/gofrs/uuid"
 	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
@@ -636,7 +637,7 @@ func (ts *AdminTestSuite) TestAdminUserDelete() {
 			require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(c.body))
 			u, err := signupParams.ToUserModel(false /* <- isSSOUser */)
 			require.NoError(ts.T(), err)
-			u, err = ts.API.signupNewUser(ts.API.db, u, "project_id")
+			u, err = ts.API.signupNewUser(ts.API.db, u, "project_id", "organization_role")
 			require.NoError(ts.T(), err)
 
 			// Setup request

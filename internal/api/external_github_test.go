@@ -12,13 +12,17 @@ import (
 	"time"
 
 	"auth/internal/models"
+
 	"github.com/gofrs/uuid"
 	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 )
 
 func (ts *ExternalTestSuite) TestSignupExternalGithub() {
-	req := httptest.NewRequest(http.MethodGet, "http://localhost/authorize?provider=github", nil)
+	organization_id := "123e4567-e89b-12d3-a456-426655440000"
+	provider := "github"
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s", provider, organization_id)
+	req := httptest.NewRequest(http.MethodGet, url_path, nil)
 	w := httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)
 	ts.Require().Equal(http.StatusFound, w.Code)
@@ -125,7 +129,7 @@ func (ts *ExternalTestSuite) TestSignupExternalGitHub_PKCE() {
 			require.NotEmpty(ts.T(), authCode)
 
 			// Check for valid provider access token, mock does not return refresh token
-			id := uuid.Must(uuid.NewV4())
+			id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
 			user, err := models.FindUserByEmailAndAudience(ts.API.db, "github@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
 			require.NoError(ts.T(), err)
 			require.NotEmpty(ts.T(), user)
@@ -291,7 +295,7 @@ func (ts *ExternalTestSuite) TestSignupExternalGitHubErrorWhenUserBanned() {
 	u := performAuthorization(ts, "github", code, "")
 	assertAuthorizationSuccess(ts, u, tokenCount, userCount, "github@example.com", "GitHub Test", "123", "http://example.com/avatar")
 
-	id := uuid.Must(uuid.NewV4())
+	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
 	user, err := models.FindUserByEmailAndAudience(ts.API.db, "github@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
 	require.NoError(ts.T(), err)
 	t := time.Now().Add(24 * time.Hour)

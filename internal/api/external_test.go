@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -8,6 +9,7 @@ import (
 
 	"auth/internal/conf"
 	"auth/internal/models"
+
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -37,6 +39,28 @@ func (ts *ExternalTestSuite) SetupTest() {
 	ts.Config.Mailer.Autoconfirm = false
 
 	models.TruncateAll(ts.API.db)
+
+	project_id := uuid.Must(uuid.NewV4())
+	// Create a project
+	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Create the admin of the organization
+	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
+	require.NoError(ts.T(), err, "Error making new user")
+	require.NoError(ts.T(), ts.API.db.Create(user, "organization_id", "organization_role"), "Error creating user")
+
+	// Create the organization if it doesn't exist
+	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
+	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Set the user as the admin of the organization
+	if err := ts.API.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
 }
 
 func (ts *ExternalTestSuite) createUser(providerId string, email string, name string, avatar string, confirmationToken string) (*models.User, error) {
@@ -63,11 +87,12 @@ func (ts *ExternalTestSuite) createUser(providerId string, email string, name st
 	}
 
 	i, err := models.NewIdentity(u, "email", map[string]interface{}{
-		"sub":   u.ID.String(),
-		"email": email,
+		"sub":             u.ID.String(),
+		"email":           email,
+		"organization_id": u.OrganizationID,
 	})
 	ts.Require().NoError(err)
-	ts.Require().NoError(ts.API.db.Create(i), "Error creating identity")
+	ts.Require().NoError(ts.API.db.Create(i, "project_id"), "Error creating identity")
 
 	return u, err
 }
@@ -77,6 +102,8 @@ func performAuthorizationRequest(ts *ExternalTestSuite, provider string, inviteT
 	if inviteToken != "" {
 		authorizeURL = authorizeURL + "&invite_token=" + inviteToken
 	}
+	organization_id := "123e4567-e89b-12d3-a456-426655440000"
+	authorizeURL = authorizeURL + "&organization_id=" + organization_id
 
 	req := httptest.NewRequest(http.MethodGet, authorizeURL, nil)
 	req.Header.Set("Referer", "https://example.netlify.com/admin")
@@ -91,6 +118,9 @@ func performPKCEAuthorizationRequest(ts *ExternalTestSuite, provider, codeChalle
 	if codeChallenge != "" {
 		authorizeURL = authorizeURL + "&code_challenge=" + codeChallenge + "&code_challenge_method=" + codeChallengeMethod
 	}
+
+	organization_id := "123e4567-e89b-12d3-a456-426655440000"
+	authorizeURL = authorizeURL + "&organization_id=" + organization_id
 
 	req := httptest.NewRequest(http.MethodGet, authorizeURL, nil)
 	req.Header.Set("Referer", "https://example.supabase.com/admin")

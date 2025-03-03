@@ -1,5 +1,7 @@
 package api
 
+//lint:file-ignore U1000 SSO provider functionality is kept for future use
+
 import (
 	"context"
 	"io"
@@ -12,6 +14,7 @@ import (
 	"auth/internal/observability"
 	"auth/internal/storage"
 	"auth/internal/utilities"
+
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
 	"github.com/go-chi/chi/v5"

@@ -13,6 +13,7 @@ import (
 	"auth/internal/api/sms_provider"
 	"auth/internal/conf"
 	"auth/internal/models"
+
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -56,9 +57,30 @@ func TestPhone(t *testing.T) {
 func (ts *PhoneTestSuite) SetupTest() {
 	models.TruncateAll(ts.API.db)
 
+	project_id := uuid.Must(uuid.NewV4())
+	// Create a project
+	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Create the admin of the organization
+	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
+	require.NoError(ts.T(), err, "Error making new user")
+	require.NoError(ts.T(), ts.API.db.Create(user, "organization_id", "organization_role"), "Error creating user")
+
+	// Create the organization
+	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
+	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Set the user as the admin of the organization
+	if err := ts.API.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
 	// Create user
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.NewUser("123456789", "", "password", ts.Config.JWT.Aud, nil, id, uuid.Nil)
+	u, err := models.NewUser("123456789", "", "password", ts.Config.JWT.Aud, nil, organization_id, uuid.Nil)
 	require.NoError(ts.T(), err, "Error creating test user model")
 	require.NoError(ts.T(), ts.API.db.Create(u, "project_id", "organization_role"), "Error saving new test user")
 }
@@ -160,8 +182,8 @@ func (ts *PhoneTestSuite) TestSendPhoneConfirmationWithTestOTP() {
 }
 
 func (ts *PhoneTestSuite) TestMissingSmsProviderConfig() {
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.FindUserByPhoneAndAudience(ts.API.db, "123456789", ts.Config.JWT.Aud, id, uuid.Nil)
+	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
+	u, err := models.FindUserByPhoneAndAudience(ts.API.db, "123456789", ts.Config.JWT.Aud, organization_id, uuid.Nil)
 	require.NoError(ts.T(), err)
 	now := time.Now()
 	u.PhoneConfirmedAt = &now
@@ -189,8 +211,9 @@ func (ts *PhoneTestSuite) TestMissingSmsProviderConfig() {
 			method:   http.MethodPost,
 			header:   "",
 			body: map[string]string{
-				"phone":    "1234567890",
-				"password": "testpassword",
+				"phone":           "1234567890",
+				"password":        "testpassword",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 			},
 			expected: map[string]interface{}{
 				"code":    http.StatusInternalServerError,
@@ -203,7 +226,8 @@ func (ts *PhoneTestSuite) TestMissingSmsProviderConfig() {
 			method:   http.MethodPost,
 			header:   "",
 			body: map[string]string{
-				"phone": "123456789",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"phone":           "123456789",
 			},
 			expected: map[string]interface{}{
 				"code":    http.StatusInternalServerError,
@@ -216,7 +240,8 @@ func (ts *PhoneTestSuite) TestMissingSmsProviderConfig() {
 			method:   http.MethodPut,
 			header:   token,
 			body: map[string]string{
-				"phone": "111111111",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"phone":           "111111111",
 			},
 			expected: map[string]interface{}{
 				"code":    http.StatusInternalServerError,
@@ -228,7 +253,9 @@ func (ts *PhoneTestSuite) TestMissingSmsProviderConfig() {
 			endpoint: "/reauthenticate",
 			method:   http.MethodGet,
 			header:   "",
-			body:     nil,
+			body: map[string]string{
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+			},
 			expected: map[string]interface{}{
 				"code":    http.StatusInternalServerError,
 				"message": "Unable to get SMS provider",
@@ -324,8 +351,9 @@ func (ts *PhoneTestSuite) TestSendSMSHook() {
 		            end; $$ language plpgsql;`,
 			header: "",
 			body: map[string]string{
-				"phone":    "1234567890",
-				"password": "testpassword",
+				"phone":           "1234567890",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"password":        "testpassword",
 			},
 			expectedCode:           http.StatusOK,
 			hookFunctionIdentifier: "send_sms_signup(input jsonb)",
@@ -345,7 +373,8 @@ func (ts *PhoneTestSuite) TestSendSMSHook() {
 		            end; $$ language plpgsql;`,
 			header: "",
 			body: map[string]string{
-				"phone": "123456789",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"phone":           "123456789",
 			},
 			expectToken:            false,
 			expectedCode:           http.StatusOK,
@@ -366,7 +395,8 @@ func (ts *PhoneTestSuite) TestSendSMSHook() {
 		    end; $$ language plpgsql;`,
 			header: token,
 			body: map[string]string{
-				"phone": "111111111",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"phone":           "111111111",
 			},
 			expectToken:            true,
 			expectedCode:           http.StatusOK,
@@ -383,8 +413,10 @@ func (ts *PhoneTestSuite) TestSendSMSHook() {
 		    begin
 		        return input;
 		   end; $$ language plpgsql;`,
-			header:                 "",
-			body:                   nil,
+			header: "",
+			body: map[string]string{
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+			},
 			expectToken:            true,
 			expectedCode:           http.StatusOK,
 			hookFunctionIdentifier: "reauthenticate(input jsonb)",
@@ -402,7 +434,8 @@ func (ts *PhoneTestSuite) TestSendSMSHook() {
                 end; $$ language plpgsql;`,
 			header: "",
 			body: map[string]string{
-				"phone": "123456789",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"phone":           "123456789",
 			},
 			expectToken:            false,
 			expectedCode:           http.StatusInternalServerError,

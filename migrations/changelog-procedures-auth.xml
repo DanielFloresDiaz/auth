@@ -1,0 +1,321 @@
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xmlns:pro="http://www.liquibase.org/xml/ns/pro"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd
+        http://www.liquibase.org/xml/ns/pro
+        http://www.liquibase.org/xml/ns/pro/liquibase-pro-latest.xsd">
+
+<changeSet author="admin" id="solomon.public.functions:1">
+ <createProcedure
+           dbms="postgresql"
+           >
+        CREATE OR REPLACE FUNCTION update_updated_at_column() RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+        NEW.updated_at := CURRENT_TIMESTAMP;
+        RETURN NEW;
+        END;
+        $$;
+
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".api_keys FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".projects FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".organizations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".smtp_configs_organizations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".smtp_configs_projects FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".organization_roles_permissions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".tier_organizations_tiers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".refresh_tokens FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".instances FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".identities FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".sessions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".mfa_factors FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".mfa_amr_claims FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".sso_providers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".sso_domains FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".saml_providers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".saml_relay_states FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".flow_state FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".one_time_tokens FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+    </createProcedure>
+    <rollback>
+        DROP FUNCTION update_updated_at_column();
+        DROP TRIGGER trigger_update_timestamp ON "auth".users;
+        DROP TRIGGER trigger_update_timestamp ON "auth".api_keys;
+        DROP TRIGGER trigger_update_timestamp ON "auth".projects;
+        DROP TRIGGER trigger_update_timestamp ON "auth".organizations;
+        DROP TRIGGER trigger_update_timestamp ON "auth".smtp_configs_organizations;
+        DROP TRIGGER trigger_update_timestamp ON "auth".smtp_configs_projects;
+        DROP TRIGGER trigger_update_timestamp ON "auth".organization_roles_permissions;
+        DROP TRIGGER trigger_update_timestamp ON "auth".tier_organizations_tiers;
+        DROP TRIGGER trigger_update_timestamp ON "auth".refresh_tokens;
+        DROP TRIGGER trigger_update_timestamp ON "auth".instances;
+        DROP TRIGGER trigger_update_timestamp ON "auth".identities;
+        DROP TRIGGER trigger_update_timestamp ON "auth".sessions;
+        DROP TRIGGER trigger_update_timestamp ON "auth".mfa_factors;
+        DROP TRIGGER trigger_update_timestamp ON "auth".mfa_amr_claims;
+        DROP TRIGGER trigger_update_timestamp ON "auth".sso_providers;
+        DROP TRIGGER trigger_update_timestamp ON "auth".sso_domains;
+        DROP TRIGGER trigger_update_timestamp ON "auth".saml_providers;
+        DROP TRIGGER trigger_update_timestamp ON "auth".saml_relay_states;
+        DROP TRIGGER trigger_update_timestamp ON "auth".flow_state;
+        DROP TRIGGER trigger_update_timestamp ON "auth".one_time_tokens;
+
+    </rollback>
+</changeSet>
+
+<changeSet author="admin" id="solomon.public.comments:1">
+ <createProcedure
+              dbms="postgresql"
+              >
+            COMMENT ON TABLE "auth".api_keys IS 'Auth: Stores API keys for organizations.';
+            COMMENT ON TABLE "auth".projects IS 'Auth: Stores projects for organizations.';
+            COMMENT ON TABLE "auth".users IS 'Auth: Stores user login data within a secure schema.';
+            COMMENT ON TABLE "auth".organizations IS 'Auth: Stores organizations for users.';
+            COMMENT ON TABLE "auth".smtp_configs_organizations IS 'Auth: Stores SMTP configurations for organizations.';
+            COMMENT ON TABLE "auth".smtp_configs_projects IS 'Auth: Stores SMTP configurations for projects.';
+            COMMENT ON TABLE "auth".organization_roles_permissions IS 'Auth: Stores organization roles and permissions.';
+            COMMENT ON TABLE "auth".tier_organizations_tiers IS 'Auth: Stores tier organizations tiers.';
+
+     </createProcedure>
+     <rollback>
+            COMMENT ON TABLE "auth".api_keys IS NULL;
+            COMMENT ON TABLE "auth".projects IS NULL;
+            COMMENT ON TABLE "auth".users IS NULL;
+            COMMENT ON TABLE "auth".organizations IS NULL;
+            COMMENT ON TABLE "auth".smtp_configs_organizations IS NULL;
+            COMMENT ON TABLE "auth".smtp_configs_projects IS NULL;
+            COMMENT ON TABLE "auth".organization_roles_permissions IS NULL;
+
+     </rollback>
+</changeSet>
+
+<changeSet author="admin" id="solomon.auth.functions:1">
+    <createProcedure
+           dbms="postgresql"
+           >
+
+        CREATE OR REPLACE FUNCTION prevent_change_organization_project()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            -- If organization_id is already set and the new organization_id is different from the old one, raise an exception
+            IF OLD.organization_id IS NOT NULL AND NEW.organization_id != OLD.organization_id THEN
+                RAISE EXCEPTION 'organization_id cannot be changed, it is immutable';
+            END IF;
+
+            -- If project_id is already set and the new project_id is different from the old one, raise an exception
+            IF OLD.project_id IS NOT NULL AND NEW.project_id != OLD.project_id THEN
+                RAISE EXCEPTION 'project_id cannot be changed, it is immutable';
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        CREATE OR REPLACE FUNCTION prevent_set_project_id()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            -- If organization_id is already set and the new project_id is different from the old one(either an existing project_id(update) or a null project_id(set)), raise an exception
+            -- When creating a user, first set the project_id and then the organization_id -> organization_role(admin). If organization_id is set first, the user is a client and cannot been binded to a project.
+            IF OLD.organization_id IS NOT NULL AND NEW.project_id != OLD.project_id THEN
+                RAISE EXCEPTION 'project_id cannot be set when organization_id is already set. If project_id is not set and organization_id is set this means the user is a client and not an admin.';
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        CREATE OR REPLACE FUNCTION update_organization_role()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            -- If the organization_role is an admin, both project_id and organization_id should be set
+            IF NEW.organization_role = 'admin' THEN
+                IF NEW.project_id IS NULL THEN
+                    RAISE EXCEPTION 'project_id cannot be null when organization_role is admin';
+                END IF;
+                IF NEW.organization_id IS NULL THEN
+                    RAISE EXCEPTION 'organization_id cannot be null when organization_role is admin';
+                END IF;
+            END IF;
+
+            -- If the organization_role is updated from admin to client, raise an exception
+            IF OLD.organization_role = 'admin' AND NEW.organization_role = 'client' THEN
+                RAISE EXCEPTION 'organization_role cannot be changed from admin to client';
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        CREATE OR REPLACE FUNCTION prevent_organization_project_null()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            -- Prevent creating a user with both organization_id and project_id null
+            IF NEW.organization_id IS NULL AND NEW.project_id IS NULL THEN
+                RAISE EXCEPTION 'organization_id and project_id cannot be null';
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        CREATE OR REPLACE FUNCTION set_admin_organization_role()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            -- Set the user as an admin if the OLD.project_id is not null and the NEW.organization_id is not null
+            IF OLD.project_id IS NOT NULL AND NEW.organization_id IS NOT NULL THEN
+                NEW.organization_role = 'admin';
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        CREATE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION prevent_change_organization_project();
+        CREATE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."flow_state" FOR EACH ROW EXECUTE FUNCTION prevent_change_organization_project();
+        CREATE TRIGGER prevent_set_project_id BEFORE UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION prevent_set_project_id();
+        CREATE TRIGGER update_organization_role BEFORE UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION update_organization_role();
+        CREATE TRIGGER prevent_organization_project_null BEFORE INSERT OR UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION prevent_organization_project_null();
+        CREATE TRIGGER prevent_organization_project_null BEFORE INSERT OR UPDATE ON "auth"."flow_state" FOR EACH ROW EXECUTE FUNCTION prevent_organization_project_null();
+        CREATE TRIGGER set_admin_organization_role BEFORE INSERT OR UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION set_admin_organization_role();
+    </createProcedure>
+    <rollback>
+        DROP FUNCTION prevent_change_organization_project();
+        DROP FUNCTION prevent_set_project_id();
+        DROP FUNCTION update_organization_role();
+        DROP FUNCTION prevent_organization_project_null();
+        DROP FUNCTION set_admin_organization_role();
+        DROP TRIGGER prevent_change_organization_project ON "auth"."users";
+        DROP TRIGGER prevent_change_organization_project ON "auth"."flow_state";
+        DROP TRIGGER prevent_set_project_id ON "auth"."users";
+        DROP TRIGGER update_organization_role ON "auth"."users";
+        DROP TRIGGER prevent_organization_project_null ON "auth"."users";
+        DROP TRIGGER prevent_organization_project_null ON "auth"."flow_state";
+        DROP TRIGGER set_admin_organization_role ON "auth"."users";
+    </rollback>
+</changeSet>
+
+<changeSet author="admin" id="solomon.auth.functions:2">
+    <createProcedure
+           dbms="postgresql"
+           >
+        CREATE OR REPLACE FUNCTION prevent_admin_fkey_change()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            -- Check if the field has been updated
+            IF NEW.admin_id != OLD.admin_id THEN
+                RAISE EXCEPTION 'admin_id cannot be changed';
+            END IF;
+
+            -- Check if the field has been updated
+            IF NEW.project_id != OLD.project_id THEN
+                RAISE EXCEPTION 'project_id cannot be changed';
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        CREATE TRIGGER prevent_admin_fkey_change BEFORE UPDATE ON "auth"."organizations" FOR EACH ROW EXECUTE FUNCTION prevent_admin_fkey_change();
+    </createProcedure>
+    <rollback>
+        DROP FUNCTION prevent_admin_fkey_change();
+        DROP TRIGGER prevent_admin_fkey_change ON "auth"."organizations";
+    </rollback>
+</changeSet>
+
+<changeSet author="admin" id="solomon.auth.identities">
+    <createProcedure
+           dbms="postgresql"
+           >
+        CREATE OR REPLACE FUNCTION prevent_set_both_organization_and_project()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            IF NEW.organization_id IS NOT NULL AND NEW.project_id IS NOT NULL THEN
+                RAISE EXCEPTION 'Cannot set both organization_id and project_id';
+            END IF;
+
+            IF OLD.organization_id IS NOT NULL AND NEW.project_id IS NOT NULL THEN
+                RAISE EXCEPTION 'Cannot set both organization_id and project_id. Organization_id is already set';
+            END IF;
+
+            IF OLD.project_id IS NOT NULL AND NEW.organization_id IS NOT NULL THEN
+                RAISE EXCEPTION 'Cannot set both organization_id and project_id. Project_id is already set';
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        CREATE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_set_both_organization_and_project();
+    </createProcedure>
+    <rollback>
+        DROP FUNCTION prevent_set_both_organization_and_project();
+        DROP TRIGGER prevent_set_both_organization_and_project ON "auth"."identities";
+        DROP TRIGGER prevent_change_organization_project ON "auth"."identities";
+    </rollback>
+</changeSet>
+
+<changeSet author="admin" id="solomon.public.functions:4">
+    <createProcedure
+           dbms="postgresql">
+        CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+    </createProcedure>
+    <rollback>
+        DROP EXTENSION IF EXISTS "pgcrypto";
+    </rollback>
+</changeSet>
+
+<changeSet author="admin" id="solomon.public.functions:5">
+    <createProcedure
+           dbms="postgresql">
+
+        CREATE OR REPLACE FUNCTION set_uuid()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            IF NEW.id IS NULL THEN
+                NEW.id := gen_random_uuid();
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        CREATE TRIGGER trigger_set_uuid BEFORE INSERT ON "auth"."api_keys" FOR EACH ROW EXECUTE FUNCTION set_uuid();
+        CREATE TRIGGER trigger_set_uuid BEFORE INSERT ON "auth"."projects" FOR EACH ROW EXECUTE FUNCTION set_uuid();
+        CREATE TRIGGER trigger_set_uuid BEFORE INSERT ON "auth"."organizations" FOR EACH ROW EXECUTE FUNCTION set_uuid();
+    </createProcedure>
+    <rollback>
+        DROP FUNCTION set_uuid();
+        DROP TRIGGER trigger_set_uuid ON "auth"."api_keys";
+        DROP TRIGGER trigger_set_uuid ON "auth"."projects";
+        DROP TRIGGER trigger_set_uuid ON "auth"."organizations";
+
+    </rollback>
+</changeSet>
+<changeSet author="admin" id="solomon.public.functions:6">
+    <createProcedure
+           dbms="postgresql">
+            CREATE OR REPLACE FUNCTION assign_project_id_if_missing()
+            RETURNS trigger AS $$
+            BEGIN
+                IF NEW.project_id IS NULL THEN
+                    SELECT project_id
+                      INTO NEW.project_id
+                      FROM auth.organizations
+                      WHERE id = NEW.organization_id;
+                END IF;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+
+            CREATE TRIGGER trigger_assign_project_id_before_insert
+            BEFORE INSERT ON auth.users
+            FOR EACH ROW
+            EXECUTE FUNCTION assign_project_id_if_missing();
+    </createProcedure>
+    <rollback>
+        DROP TRIGGER trigger_assign_project_id_before_insert ON auth.users;
+        DROP FUNCTION assign_project_id_if_missing();
+    </rollback>
+</changeSet>
+</databaseChangeLog>

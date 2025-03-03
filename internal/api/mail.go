@@ -8,6 +8,7 @@ import (
 
 	"auth/internal/hooks"
 	mail "auth/internal/mailer"
+
 	"github.com/gofrs/uuid"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -17,6 +18,7 @@ import (
 	"auth/internal/models"
 	"auth/internal/storage"
 	"auth/internal/utilities"
+
 	"github.com/badoux/checkmail"
 	"github.com/fatih/structs"
 	"github.com/pkg/errors"
@@ -28,12 +30,13 @@ var (
 )
 
 type GenerateLinkParams struct {
-	Type       string                 `json:"type"`
-	Email      string                 `json:"email"`
-	NewEmail   string                 `json:"new_email"`
-	Password   string                 `json:"password"`
-	Data       map[string]interface{} `json:"data"`
-	RedirectTo string                 `json:"redirect_to"`
+	Type           string                 `json:"type"`
+	Email          string                 `json:"email"`
+	NewEmail       string                 `json:"new_email"`
+	Password       string                 `json:"password"`
+	Data           map[string]interface{} `json:"data"`
+	RedirectTo     string                 `json:"redirect_to"`
+	OrganizationID uuid.UUID              `json:"organization_id"`
 }
 
 type GenerateLinkResponse struct {
@@ -45,6 +48,7 @@ type GenerateLinkResponse struct {
 	RedirectTo       string `json:"redirect_to"`
 }
 
+//lint:ignore U1000 This function is kept for API completeness and future use
 func (a *API) adminGenerateLink(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	db := a.db.WithContext(ctx)
@@ -61,14 +65,18 @@ func (a *API) adminGenerateLink(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+
+	if params.OrganizationID == uuid.Nil {
+		return badRequestError(ErrorCodeValidationFailed, "Organization ID is required")
+	}
+
 	referrer := utilities.GetReferrer(r, config)
 	if utilities.IsRedirectURLValid(config, params.RedirectTo) {
 		referrer = params.RedirectTo
 	}
 
 	aud := a.requestAud(ctx, r)
-	organization_id := a.requestOrganizationID(ctx, r)
-	user, err := models.FindUserByEmailAndAudience(db, params.Email, aud, organization_id, uuid.Nil)
+	user, err := models.FindUserByEmailAndAudience(db, params.Email, aud, params.OrganizationID, uuid.Nil)
 	if err != nil {
 		if models.IsNotFoundError(err) {
 			switch params.Type {
@@ -236,7 +244,7 @@ func (a *API) adminGenerateLink(w http.ResponseWriter, r *http.Request) error {
 			if terr != nil {
 				return terr
 			}
-			if duplicateUser, terr := models.IsDuplicatedEmail(tx, params.NewEmail, user.Aud, user, organization_id, uuid.Nil); terr != nil {
+			if duplicateUser, terr := models.IsDuplicatedEmail(tx, params.NewEmail, user.Aud, user, params.OrganizationID, uuid.Nil); terr != nil {
 				return internalServerError("Database error checking email").WithInternalError(terr)
 			} else if duplicateUser != nil {
 				return unprocessableEntityError(ErrorCodeEmailExists, DuplicateEmailMsg)

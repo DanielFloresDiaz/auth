@@ -136,7 +136,8 @@ func NewAPIWithVersion(globalConfig *conf.GlobalConfiguration, db *storage.Conne
 			r.Get("/", api.ExternalProviderRedirect)
 		})
 
-		// r.With(api.requireAdminCredentials).Post("/invite", api.Invite)
+		r.With(api.requireAdminCredentials).Post("/invite", api.Invite)
+
 		r.With(api.verifyCaptcha).Route("/signup", func(r *router) {
 			// rate limit per hour
 			limitAnonymousSignIns := api.limiterOpts.AnonymousSignIns
@@ -183,19 +184,19 @@ func NewAPIWithVersion(globalConfig *conf.GlobalConfiguration, db *storage.Conne
 		r.With(api.limitHandler(api.limiterOpts.Resend)).
 			With(api.verifyCaptcha).Post("/resend", api.Resend)
 
-		/*r.With(api.limitHandler(api.limiterOpts.MagicLink)).
+		r.With(api.limitHandler(api.limiterOpts.MagicLink)).
 			With(api.verifyCaptcha).Post("/magiclink", api.MagicLink)
 
 		r.With(api.limitHandler(api.limiterOpts.Otp)).
-			With(api.verifyCaptcha).Post("/otp", api.Otp) */
+			With(api.verifyCaptcha).Post("/otp", api.Otp)
 
 		r.With(api.limitHandler(api.limiterOpts.Token)).
 			With(api.verifyCaptcha).Post("/token", api.Token)
 
-		/*r.With(api.limitHandler(api.limiterOpts.Verify)).Route("/verify", func(r *router) {
+		r.With(api.limitHandler(api.limiterOpts.Verify)).Route("/verify", func(r *router) {
 			r.Get("/", api.Verify)
 			r.Post("/", api.Verify)
-		})*/
+		})
 
 		r.With(api.requireAuthentication).Post("/logout", api.Logout)
 
@@ -272,10 +273,7 @@ func NewAPIWithVersion(globalConfig *conf.GlobalConfiguration, db *storage.Conne
 						r.Delete("/", api.adminUserDelete)
 					})
 				})
-				/*
-					r.Post("/generate_link", api.adminGenerateLink)
-
-				*/
+				/* r.Post("/generate_link", api.adminGenerateLink)/*
 
 				/*r.Route("/sso", func(r *router) {
 					r.Route("/providers", func(r *router) {

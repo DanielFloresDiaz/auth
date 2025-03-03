@@ -9,6 +9,7 @@ import (
 	"auth/internal/crypto"
 	"auth/internal/storage"
 	"auth/internal/storage/test"
+
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -540,7 +541,7 @@ func (ts *UserTestSuite) TestCreateMultipleAdminUsersWithSameEmailSameProject() 
 	projectID := uuid.Must(uuid.NewV4())
 
 	// Create project
-	if err := ts.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", projectID)).Exec(); err != nil {
+	if err := ts.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project_1')", projectID)).Exec(); err != nil {
 		panic(err)
 	}
 
@@ -562,7 +563,7 @@ func (ts *UserTestSuite) TestCreateMultpleUsersWithSameEmailDifferentOrganizatio
 	projectID := uuid.Must(uuid.NewV4())
 
 	// Create project
-	if err := ts.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", projectID)).Exec(); err != nil {
+	if err := ts.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project_1')", projectID)).Exec(); err != nil {
 		panic(err)
 	}
 
@@ -606,7 +607,7 @@ func (ts *UserTestSuite) TestCreateMultpleUsersWithSameEmailSameOrganization() {
 	projectID := uuid.Must(uuid.NewV4())
 
 	// Create project
-	if err := ts.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", projectID)).Exec(); err != nil {
+	if err := ts.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project_1')", projectID)).Exec(); err != nil {
 		panic(err)
 	}
 
@@ -639,7 +640,7 @@ func (ts *UserTestSuite) TestCreateUserAndSetProjectID() {
 	projectID := uuid.Must(uuid.NewV4())
 
 	// Create project
-	if err := ts.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", projectID)).Exec(); err != nil {
+	if err := ts.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project_1')", projectID)).Exec(); err != nil {
 		panic(err)
 	}
 

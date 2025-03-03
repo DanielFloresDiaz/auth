@@ -11,7 +11,10 @@ func (ts *ExternalTestSuite) TestSignupExternalTwitter() {
 	server := TwitterTestSignupSetup(ts, nil, nil, "", "")
 	defer server.Close()
 
-	req := httptest.NewRequest(http.MethodGet, "http://localhost/authorize?provider=twitter", nil)
+	organization_id := "123e4567-e89b-12d3-a456-426655440000"
+	provider := "twitter"
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s", provider, organization_id)
+	req := httptest.NewRequest(http.MethodGet, url_path, nil)
 	w := httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)
 	ts.Require().Equal(http.StatusFound, w.Code)

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 	"auth/internal/observability"
 	"auth/internal/storage"
 	"auth/internal/utilities"
+
 	"github.com/fatih/structs"
 	"github.com/gofrs/uuid"
 	"github.com/sethvargo/go-password/password"
@@ -45,7 +47,6 @@ type VerifyParams struct {
 	Phone          string    `json:"phone"`
 	RedirectTo     string    `json:"redirect_to"`
 	OrganizationID uuid.UUID `json:"organization_id"`
-	ProjectID      uuid.UUID `json:"project_id"`
 }
 
 func (p *VerifyParams) Validate(r *http.Request, a *API) error {
@@ -85,6 +86,10 @@ func (p *VerifyParams) Validate(r *http.Request, a *API) error {
 				return badRequestError(ErrorCodeValidationFailed, "Only the token_hash and type should be provided")
 			}
 		}
+
+		if p.OrganizationID == uuid.Nil {
+			return badRequestError(ErrorCodeValidationFailed, "Organization ID is required")
+		}
 	default:
 		return nil
 	}
@@ -109,10 +114,6 @@ func (a *API) Verify(w http.ResponseWriter, r *http.Request) error {
 		}
 		if err := params.Validate(r, a); err != nil {
 			return err
-		}
-
-		if params.OrganizationID == uuid.Nil && params.ProjectID == uuid.Nil {
-			return badRequestError(ErrorCodeValidationFailed, "Organization ID or Project ID is required")
 		}
 		return a.verifyPost(w, r, params)
 	default:
@@ -342,7 +343,7 @@ func (a *API) signupVerify(r *http.Request, ctx context.Context, conn *storage.C
 		// we still check for the length of the identities slice to be safe.
 		if len(user.Identities) != 0 {
 			if len(user.Identities) > 1 {
-				return internalServerError("User has more than one identity on signup")
+				return internalServerError(fmt.Sprintf("User has more than one identity on signup: %v", user.Identities))
 			}
 			emailIdentity := user.Identities[0]
 			if emailIdentity.Email != user.Email {
@@ -405,7 +406,7 @@ func (a *API) smsVerify(r *http.Request, conn *storage.Connection, user *models.
 			if terr := models.NewAuditLogEntry(r, tx, user, models.UserModifiedAction, "", nil); terr != nil {
 				return terr
 			}
-			if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "phone", user.OrganizationID.UUID, user.OrganizationID.UUID); terr != nil {
+			if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "phone", user.OrganizationID.UUID, user.ProjectID.UUID); terr != nil {
 				if !models.IsNotFoundError(terr) {
 					return terr
 				}
@@ -553,7 +554,7 @@ func (a *API) emailChangeVerify(r *http.Request, conn *storage.Connection, param
 			return terr
 		}
 
-		if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "email", user.OrganizationID.UUID, user.OrganizationID.UUID); terr != nil {
+		if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "email", user.OrganizationID.UUID, user.ProjectID.UUID); terr != nil {
 			if !models.IsNotFoundError(terr) {
 				return terr
 			}
@@ -660,15 +661,15 @@ func (a *API) verifyUserAndToken(conn *storage.Connection, params *VerifyParams,
 
 	switch params.Type {
 	case phoneChangeVerification:
-		user, err = models.FindUserByPhoneChangeAndAudience(conn, params.Phone, aud, params.OrganizationID, params.ProjectID)
+		user, err = models.FindUserByPhoneChangeAndAudience(conn, params.Phone, aud, params.OrganizationID, uuid.Nil)
 	case smsVerification:
-		user, err = models.FindUserByPhoneAndAudience(conn, params.Phone, aud, params.OrganizationID, params.ProjectID)
+		user, err = models.FindUserByPhoneAndAudience(conn, params.Phone, aud, params.OrganizationID, uuid.Nil)
 	case mail.EmailChangeVerification:
 		// Since the email change could be trigger via the implicit or PKCE flow,
 		// the query used has to also check if the token saved in the db contains the pkce_ prefix
 		user, err = models.FindUserForEmailChange(conn, params.Email, tokenHash, aud, config.Mailer.SecureEmailChangeEnabled)
 	default:
-		user, err = models.FindUserByEmailAndAudience(conn, params.Email, aud, params.OrganizationID, params.ProjectID)
+		user, err = models.FindUserByEmailAndAudience(conn, params.Email, aud, params.OrganizationID, uuid.Nil)
 	}
 
 	if err != nil {

@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"auth/internal/conf"
 	mail "auth/internal/mailer"
 	"auth/internal/models"
+
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -37,6 +39,28 @@ func TestResend(t *testing.T) {
 
 func (ts *ResendTestSuite) SetupTest() {
 	models.TruncateAll(ts.API.db)
+
+	project_id := uuid.Must(uuid.NewV4())
+	// Create a project
+	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Create the admin of the organization
+	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
+	require.NoError(ts.T(), err, "Error making new user")
+	require.NoError(ts.T(), ts.API.db.Create(user, "organization_id", "organization_role"), "Error creating user")
+
+	// Create the organization
+	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
+	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Set the user as the admin of the organization
+	if err := ts.API.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
 }
 
 func (ts *ResendTestSuite) TestResendValidation() {
@@ -48,8 +72,9 @@ func (ts *ResendTestSuite) TestResendValidation() {
 		{
 			desc: "Invalid type",
 			params: map[string]interface{}{
-				"type":  "invalid",
-				"email": "foo@example.com",
+				"type":            "invalid",
+				"email":           "foo@example.com",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
 			},
 			expected: map[string]interface{}{
 				"code":    http.StatusBadRequest,
@@ -59,8 +84,9 @@ func (ts *ResendTestSuite) TestResendValidation() {
 		{
 			desc: "Type & email mismatch",
 			params: map[string]interface{}{
-				"type":  "sms",
-				"email": "foo@example.com",
+				"type":            "sms",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"email":           "foo@example.com",
 			},
 			expected: map[string]interface{}{
 				"code":    http.StatusBadRequest,
@@ -70,8 +96,9 @@ func (ts *ResendTestSuite) TestResendValidation() {
 		{
 			desc: "Phone & email change type",
 			params: map[string]interface{}{
-				"type":  "email_change",
-				"phone": "+123456789",
+				"type":            "email_change",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"phone":           "+123456789",
 			},
 			expected: map[string]interface{}{
 				"code":    http.StatusOK,
@@ -81,9 +108,10 @@ func (ts *ResendTestSuite) TestResendValidation() {
 		{
 			desc: "Email & phone number provided",
 			params: map[string]interface{}{
-				"type":  "email_change",
-				"phone": "+123456789",
-				"email": "foo@example.com",
+				"type":            "email_change",
+				"phone":           "+123456789",
+				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"email":           "foo@example.com",
 			},
 			expected: map[string]interface{}{
 				"code":    http.StatusBadRequest,
@@ -112,7 +140,7 @@ func (ts *ResendTestSuite) TestResendValidation() {
 
 func (ts *ResendTestSuite) TestResendSuccess() {
 	// Create user
-	id := uuid.Must(uuid.NewV4())
+	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
 	u, err := models.NewUser("123456789", "foo@example.com", "password", ts.Config.JWT.Aud, nil, id, uuid.Nil)
 	require.NoError(ts.T(), err, "Error creating test user model")
 
@@ -138,7 +166,7 @@ func (ts *ResendTestSuite) TestResendSuccess() {
 	phoneUser.EmailChange = "bar@example.com"
 	phoneUser.EmailChangeSentAt = &now
 	phoneUser.EmailChangeTokenNew = "123456"
-	require.NoError(ts.T(), ts.API.db.Create(phoneUser), "Error saving new test user")
+	require.NoError(ts.T(), ts.API.db.Create(phoneUser, "project_id", "organization_role"), "Error saving new test user")
 	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, phoneUser.ID, phoneUser.EmailChange, phoneUser.EmailChangeTokenNew, models.EmailChangeTokenNew))
 
 	emailUser, err := models.NewUser("", "bar@example.com", "password", ts.Config.JWT.Aud, nil, id, uuid.Nil)
@@ -146,7 +174,7 @@ func (ts *ResendTestSuite) TestResendSuccess() {
 	phoneUser.PhoneChange = "1234567890"
 	phoneUser.PhoneChangeSentAt = &now
 	phoneUser.PhoneChangeToken = "123456"
-	require.NoError(ts.T(), ts.API.db.Create(emailUser), "Error saving new test user")
+	require.NoError(ts.T(), ts.API.db.Create(emailUser, "project_id", "organization_role"), "Error saving new test user")
 	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, phoneUser.ID, phoneUser.PhoneChange, phoneUser.PhoneChangeToken, models.PhoneChangeToken))
 
 	cases := []struct {
@@ -158,32 +186,36 @@ func (ts *ResendTestSuite) TestResendSuccess() {
 		{
 			desc: "Resend signup confirmation",
 			params: map[string]interface{}{
-				"type":  "signup",
-				"email": u.GetEmail(),
+				"type":            "signup",
+				"email":           u.GetEmail(),
+				"organization_id": id,
 			},
 			user: u,
 		},
 		{
 			desc: "Resend email change",
 			params: map[string]interface{}{
-				"type":  "email_change",
-				"email": u.GetEmail(),
+				"type":            "email_change",
+				"organization_id": id,
+				"email":           u.GetEmail(),
 			},
 			user: u,
 		},
 		{
 			desc: "Resend email change for phone user",
 			params: map[string]interface{}{
-				"type":  "email_change",
-				"phone": phoneUser.GetPhone(),
+				"type":            "email_change",
+				"organization_id": id,
+				"phone":           phoneUser.GetPhone(),
 			},
 			user: phoneUser,
 		},
 		{
 			desc: "Resend phone change for email user",
 			params: map[string]interface{}{
-				"type":  "phone_change",
-				"email": emailUser.GetEmail(),
+				"type":            "phone_change",
+				"organization_id": id,
+				"email":           emailUser.GetEmail(),
 			},
 			user: emailUser,
 		},

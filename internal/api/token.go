@@ -372,6 +372,7 @@ func (a *API) generateAccessToken(r *http.Request, tx *storage.Connection, user 
 
 	organization_id := user.OrganizationID.UUID
 	organization_role := user.OrganizationRole
+	project_id := user.ProjectID.UUID
 
 	tier_model, tier_time, tier_usage, terr := models.FindTiersByOrganizationIDAndOrganizationRole(tx, organization_id, organization_role)
 	if terr != nil {
@@ -399,6 +400,7 @@ func (a *API) generateAccessToken(r *http.Request, tx *storage.Connection, user 
 		AuthenticationMethodReference: amr,
 		IsAnonymous:                   user.IsAnonymous,
 		OrganizationID:                organization_id,
+		ProjectID:                     project_id,
 		OrganizationRole:              organization_role,
 		TierModel:                     tier_model,
 		TierTime:                      tier_time,

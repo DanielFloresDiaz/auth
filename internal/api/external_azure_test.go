@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"auth/internal/api/provider"
+
 	"github.com/coreos/go-oidc/v3/oidc"
 	jwt "github.com/golang-jwt/jwt/v5"
 )
@@ -103,7 +104,10 @@ func mintIDToken(user string) string {
 }
 
 func (ts *ExternalTestSuite) TestSignupExternalAzure() {
-	req := httptest.NewRequest(http.MethodGet, "http://localhost/authorize?provider=azure", nil)
+	organization_id := "123e4567-e89b-12d3-a456-426655440000"
+	provider := "azure"
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s", provider, organization_id)
+	req := httptest.NewRequest(http.MethodGet, url_path, nil)
 	w := httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)
 	ts.Require().Equal(http.StatusFound, w.Code)

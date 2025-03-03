@@ -5,6 +5,7 @@ import (
 
 	"auth/internal/models"
 	"auth/internal/storage"
+
 	"github.com/gofrs/uuid"
 )
 
@@ -61,9 +62,7 @@ func (a *API) Recover(w http.ResponseWriter, r *http.Request) error {
 		return internalServerError("Unable to process request").WithInternalError(err)
 	}
 	if isPKCEFlow(flowType) {
-		project_id := params.ProjectID
-		organization_id := params.OrganizationID
-		if _, err := generateFlowState(db, models.Recovery.String(), models.Recovery, params.CodeChallengeMethod, params.CodeChallenge, &(user.ID), organization_id, project_id); err != nil {
+		if _, err := generateFlowState(db, models.Recovery.String(), models.Recovery, params.CodeChallengeMethod, params.CodeChallenge, &(user.ID), params.OrganizationID, params.ProjectID); err != nil {
 			return err
 		}
 	}
