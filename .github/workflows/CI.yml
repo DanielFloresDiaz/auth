@@ -26,32 +26,20 @@ on:
 
 permissions:
   contents: read
+  packages: write  # Add permission to push to GHCR
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  test:
-    strategy:
-      matrix:
-        go-version: [1.22.x]
+  lint:
     runs-on: ubuntu-20.04
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: root
-          POSTGRES_DB: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - name: Install Go
         uses: actions/setup-go@v2
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version: 1.22.x
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Check gofmt
@@ -77,6 +65,34 @@ jobs:
           set -x
           go install github.com/securego/gosec/v2/cmd/gosec@latest
           make sec
+
+  test:
+    needs: [lint]
+    strategy:
+      matrix:
+        go-version: [1.22.x]
+    runs-on: ubuntu-20.04
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: root
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: Checkout code
+        uses: actions/checkout@v2
       - name: Init Database
         run: psql -f hack/init_postgres.sql postgresql://postgres:root@localhost:5432/postgres
       - name: Run migrations
@@ -84,13 +100,34 @@ jobs:
       - name: Run extra migrations
         uses: liquibase-github-actions/update@v4.30.0
         with:
-          changelogFile: 'liquibase-changelog.sql'
+          changelogFile: 'liquibase_migrations/changelog-test.sql'
           url: 'jdbc:postgresql://postgres:5432/postgres'
           username: 'supabase_auth_admin'
           password: 'root'
           rollbackOnError: 'true'
-      - name: Lint and test
+      - name: Run tests
         run: make test
+      - name: Store coverage file
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-file
+          path: coverage.out
+          retention-days: 1
+
+  coverage:
+    needs: [test]
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.22.x
+      - name: Download coverage file
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-file
       - name: Cleanup coverage
         run: |
           set -x
@@ -103,7 +140,128 @@ jobs:
           sed -i '/^github.com\/supabase\/auth\/cmd/d' coverage.out
           sed -i '/^github.com\/supabase\/auth\/docs/d' coverage.out
           sed -i '/^github.com\/supabase\/auth\/main/d' coverage.out
-
+      
+      - name: Generate coverage XML
+        run: |
+          go tool cover -html=coverage.out -o coverage.html
+          go install github.com/axw/gocov/gocov@latest
+          go install github.com/AlekSi/gocov-xml@latest
+          gocov convert coverage.out | gocov-xml > coverage.xml
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: true
+          verbose: true
+      
       - uses: shogo82148/actions-goveralls@v1
         with:
           path-to-profile: coverage.out
+
+  # https://github.com/marketplace/actions/alls-green#why used for branch protection checks
+  check:
+    if: always()
+    needs: [lint, test, coverage]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decide whether the needed jobs succeeded or failed
+        uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
+
+  release:
+    needs: [check]
+    if: success() && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write  # Required for pushing to GHCR
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.22.x
+          
+      # Extract version from GitHub tag
+      - name: Extract version from Git tag
+        id: tag_version
+        run: |
+          # Extract the version string from GITHUB_REF (refs/tags/v1.2.3 or refs/tags/1.2.3)
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION=$TAG
+          # Check if this is a dev tag
+          if [[ $TAG == dev-* ]]; then
+            IS_DEV_TAG="true"
+            VERSION="dev"  # Fixed tag for all development builds
+          else
+            IS_DEV_TAG="false"
+            VERSION=$TAG
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_dev_tag=$IS_DEV_TAG" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION from tag $TAG (dev tag: $IS_DEV_TAG)"
+          
+      - name: Build binaries
+        run: |
+          CGO_ENABLED=0 go build -ldflags "-X github.com/supabase/auth/internal/utilities.Version=${GITHUB_REF#refs/tags/}" -o auth
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/supabase/auth/internal/utilities.Version=${GITHUB_REF#refs/tags/}" -o auth-linux-amd64
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-X github.com/supabase/auth/internal/utilities.Version=${GITHUB_REF#refs/tags/}" -o auth-linux-arm64
+      
+      # Docker build and push steps
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # For dev tags, use a single fixed "dev" tag
+            ${{ steps.tag_version.outputs.is_dev_tag == 'true' && format('type=raw,value={0}', steps.tag_version.outputs.version) || '' }}
+            # For production releases, use semantic versioning tags
+            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=raw,value=${{ steps.tag_version.outputs.version }}' || '' }}
+            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{version}}' || '' }}
+            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{major}}.{{minor}}' || '' }}
+            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{major}}' || '' }}
+            # Always include the commit SHA
+            type=sha,format=short
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          file: ./Dockerfile
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            RELEASE_VERSION=${{ steps.tag_version.outputs.version }}
+      
+      # Skip release creation for dev tags
+      - name: Create Release
+        if: steps.tag_version.outputs.is_dev_tag != 'true'
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            auth
+            auth-linux-amd64
+            auth-linux-arm64
+          tag_name: ${{ github.ref }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
