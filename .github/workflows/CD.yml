@@ -1,0 +1,110 @@
+name: Continuous Deployment
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'refs/tags/') }}
+    
+    permissions:
+      contents: read
+      id-token: write # Needed for GCP authentication
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+      
+      # Authentication with Google Cloud
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+      
+      - name: Determine deployment environment
+        id: deployment_env
+        run: |
+          # Extract tag from the head branch
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          
+          if [[ $TAG == dev-* ]]; then
+            echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "Deploying to development environment with tag: $TAG"
+          else
+            echo "environment=prod" >> $GITHUB_OUTPUT
+            echo "Deploying to production environment with tag: $TAG"
+          fi
+      
+      - name: Configure kubectl for dev
+        if: steps.deployment_env.outputs.environment == 'dev'
+        run: gcloud container clusters get-credentials ${{ secrets.GKE_DEV_CLUSTER_NAME }} --region ${{ secrets.GKE_CLUSTER_REGION }} --project ${{ secrets.GCP_PROJECT_ID }}
+      
+      - name: Configure kubectl for prod
+        if: steps.deployment_env.outputs.environment == 'prod'
+        run: gcloud container clusters get-credentials ${{ secrets.GKE_PROD_CLUSTER_NAME }} --region ${{ secrets.GKE_CLUSTER_REGION }} --project ${{ secrets.GCP_PROJECT_ID }}
+      
+      - name: Install Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+      
+      - name: Update deployment image tag
+        run: |
+          TAG=${{ steps.deployment_env.outputs.tag }}
+          ENV=${{ steps.deployment_env.outputs.environment }}
+          
+          # Create a kustomization overlay to set the image tag
+          cd auth-kubernetes/overlays/$ENV
+          kustomize edit set image ghcr.io/danielfloresdiaz/auth=ghcr.io/danielfloresdiaz/auth:$TAG
+          
+          # Show the changes
+          echo "Deploying image with tag: $TAG"
+          cat kustomization.yaml
+      
+      - name: Apply Kustomize configuration for dev
+        if: steps.deployment_env.outputs.environment == 'dev'
+        run: |
+          kubectl apply -k auth-kubernetes/overlays/dev
+      
+      - name: Apply Kustomize configuration for prod
+        if: steps.deployment_env.outputs.environment == 'prod'
+        run: |
+          kubectl apply -k auth-kubernetes/overlays/prod
+      
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/auth-api-deployment -n auth
+          kubectl rollout status deployment/auth-db-migration-deployment -n auth
+          
+          # Verify the image version was updated
+          DEPLOYED_IMAGE=$(kubectl get deployment/auth-api-deployment -n auth -o jsonpath='{.spec.template.spec.containers[0].image}')
+          echo "✅ Deployed image: $DEPLOYED_IMAGE"
+          
+          if [[ "$DEPLOYED_IMAGE" == *"${{ steps.deployment_env.outputs.tag }}"* ]]; then
+            echo "✅ Correct image tag deployed!"
+          else
+            echo "❌ Incorrect image tag deployed!"
+            exit 1
+          fi
+          
+          echo "✅ Deployment to ${{ steps.deployment_env.outputs.environment }} environment completed successfully!"
