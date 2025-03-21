@@ -294,7 +294,6 @@ USING (
 	organization_id = current_setting('app.current_organization_id')::uuid
 	OR (
 		project_id = current_setting('app.current_project_id')::uuid
-		AND (current_user = 'brawler_admin' OR current_user = 'zion_admin')
 	)
 )
 WITH CHECK (
@@ -304,37 +303,26 @@ WITH CHECK (
 --rollback DROP POLICY api_keys_policy ON "auth".api_keys;
 
 --changeset solomon.auth:grant:1 labels:auth context:auth
---comment: grant select, insert, update, delete on all api_keys in schema auth to users: zion_admin, zion_user, brawler_admin, brawler_user
-GRANT SELECT, INSERT, UPDATE, DELETE ON "auth".api_keys TO zion_admin;
-GRANT SELECT, INSERT, UPDATE, DELETE ON "auth".api_keys TO zion_user;
-GRANT SELECT, INSERT, UPDATE, DELETE ON "auth".api_keys TO brawler_admin;
-GRANT SELECT, INSERT, UPDATE, DELETE ON "auth".api_keys TO brawler_user;
---rollback REVOKE SELECT, INSERT, UPDATE, DELETE ON "auth".api_keys FROM zion_admin;
+--comment: grant select, insert, update, delete on all api_keys in schema auth to roles
+GRANT SELECT, INSERT, UPDATE, DELETE ON "auth".api_keys TO solomon_role;
+--rollback REVOKE SELECT, INSERT, UPDATE, DELETE ON "auth".api_keys FROM solomon_role;
 
 --changeset solomon.auth:grant:2 labels:auth context:auth
---comment: grant select on projects to zion_user, brawler_user
-GRANT SELECT ON "auth".projects TO zion_user;
-GRANT SELECT ON "auth".projects TO brawler_user;
---rollback REVOKE SELECT ON "auth".projects FROM zion_user;
---rollback REVOKE SELECT ON "auth".projects FROM brawler_user;
+--comment: grant select on projects to solomon_role
+GRANT SELECT ON "auth".projects TO solomon_role;
+--rollback REVOKE SELECT ON "auth".projects FROM solomon_role;
 
 --changeset solomon.auth:grant:3 labels:auth context:auth
---comment: grant select, insert on project_rate_limits to zion_user, brawler_user
-GRANT SELECT, INSERT ON "auth".project_rate_limits TO zion_user;
-GRANT SELECT, INSERT ON "auth".project_rate_limits TO brawler_user;
---rollback REVOKE SELECT, INSERT ON "auth".project_rate_limits FROM zion_user;
---rollback REVOKE SELECT, INSERT ON "auth".project_rate_limits FROM brawler_user;
+--comment: grant select, insert on project_rate_limits to solomon_role
+GRANT SELECT, INSERT ON "auth".project_rate_limits TO solomon_role;
+--rollback REVOKE SELECT, INSERT ON "auth".project_rate_limits FROM solomon_role;
 
 --changeset solomon.auth:grant:4 labels:auth context:auth
---comment: grant select on organizations to zion_user, brawler_user
-GRANT SELECT ON "auth".organizations TO zion_user;
-GRANT SELECT ON "auth".organizations TO brawler_user;
---rollback REVOKE SELECT ON "auth".organizations FROM zion_user;
---rollback REVOKE SELECT ON "auth".organizations FROM brawler_user;
+--comment: grant select on organizations to solomon_role
+GRANT SELECT ON "auth".organizations TO solomon_role;
+--rollback REVOKE SELECT ON "auth".organizations FROM solomon_role;
 
 --changeset solomon.auth:grant:5 labels:auth context:auth
---comment: grant select on tier_organizations_tiers to zion_user, brawler_user
-GRANT SELECT ON "auth".tier_organizations_tiers TO zion_user;
-GRANT SELECT ON "auth".tier_organizations_tiers TO brawler_user;
---rollback REVOKE SELECT ON "auth".tier_organizations_tiers FROM zion_user;
---rollback REVOKE SELECT ON "auth".tier_organizations_tiers FROM brawler_user;
+--comment: grant select on tier_organizations_tiers to solomon_role
+GRANT SELECT ON "auth".tier_organizations_tiers TO solomon_role;
+--rollback REVOKE SELECT ON "auth".tier_organizations_tiers FROM solomon_role;

@@ -256,7 +256,7 @@
     </rollback>
 </changeSet>
 
-<changeSet author="admin" id="solomon.public.functions:4">
+<!-- <changeSet author="admin" id="solomon.public.functions:4">
     <createProcedure
            dbms="postgresql">
         CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -264,7 +264,7 @@
     <rollback>
         DROP EXTENSION IF EXISTS "pgcrypto";
     </rollback>
-</changeSet>
+</changeSet> -->
 
 <changeSet author="admin" id="solomon.public.functions:5">
     <createProcedure
