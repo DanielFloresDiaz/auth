@@ -18,7 +18,7 @@ data:
   DB_NAME: "postgres_auth"
   
   # API Configuration
-  API_EXTERNAL_URL: "https://solomon-auth.com" # Updated to domain name
+  API_EXTERNAL_URL: "https://solomon-auth.com/" # Updated to domain name
   GOTRUE_API_HOST: "0.0.0.0"
   PORT: "9999"
 
@@ -36,7 +36,7 @@ data:
   # OAuth Configuration
   GOTRUE_EXTERNAL_GOOGLE_ENABLED: "true"
   GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: "59413000494-dlrcgs6btub8oamochbqjd64su5v2s3a.apps.googleusercontent.com"
-  GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: "https://solomon-auth.com:9999/callback" # Updated to domain name
+  GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: "https://solomon-auth.com/auth/callback" # Updated to domain name
   
   # Anonymous auth config
   GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
