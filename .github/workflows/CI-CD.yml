@@ -67,6 +67,7 @@ jobs:
           make sec
 
   test:
+    if: ${{ !contains(github.event.head_commit.message, '[skip test]') }}
     needs: [lint]
     strategy:
       matrix:
@@ -159,9 +160,18 @@ jobs:
         with:
           path-to-profile: coverage.out
 
+  # Add check-skip job for when tests are skipped
+  check-skip:
+    if: ${{ contains(github.event.head_commit.message, '[skip test]') }}
+    needs: [lint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip tests
+        run: echo "Tests skipped but proceeding with workflow"
+
   # https://github.com/marketplace/actions/alls-green#why used for branch protection checks
   check:
-    if: always()
+    if: ${{ !contains(github.event.head_commit.message, '[skip test]') }}
     needs: [lint, test, coverage]
     runs-on: ubuntu-latest
     steps:
@@ -171,8 +181,13 @@ jobs:
           jobs: ${{ toJSON(needs) }}
 
   release:
-    needs: [check]
-    if: success() && startsWith(github.ref, 'refs/tags/')
+    # Depend on both check and check-skip jobs
+    needs: [check, check-skip]
+    # Run if either check or check-skip succeeded, and we're on a tag
+    if: |
+      always() &&
+      ((needs.check.result == 'success') || (needs.check-skip.result == 'success')) &&
+      startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -193,7 +208,7 @@ jobs:
           TAG=${GITHUB_REF#refs/tags/}
           VERSION=$TAG
           # Check if this is a dev tag
-          if [[ $TAG == dev-* ]]; then
+          if [[ $TAG == dev* ]]; then
             IS_DEV_TAG="true"
             VERSION="dev"  # Fixed tag for all development builds
           else
@@ -265,3 +280,109 @@ jobs:
           name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false
+
+  deploy:
+    needs: [release]
+    if: |
+      always() && (needs.release.result == 'success')
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      id-token: write # Needed for GCP authentication
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+      
+      # Authentication with Google Cloud
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+      
+      - name: Install gke-gcloud-auth-plugin
+        run: |
+          gcloud components install gke-gcloud-auth-plugin
+          echo 'export USE_GKE_GCLOUD_AUTH_PLUGIN=True' >> $GITHUB_ENV
+      
+      - name: Determine deployment environment
+        id: deployment_env
+        run: |
+          # Extract tag directly from GITHUB_REF
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          
+          if [[ $TAG == dev* ]]; then
+            echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "Deploying to development environment with tag: $TAG"
+          else
+            echo "environment=prod" >> $GITHUB_OUTPUT
+            echo "Deploying to production environment with tag: $TAG"
+          fi
+      
+      - name: Configure kubectl for dev
+        if: steps.deployment_env.outputs.environment == 'dev'
+        run: gcloud container clusters get-credentials ${{ secrets.GKE_DEV_CLUSTER_NAME }} --region ${{ secrets.GKE_CLUSTER_REGION }} --project ${{ secrets.GCP_PROJECT_ID }}
+      
+      - name: Configure kubectl for prod
+        if: steps.deployment_env.outputs.environment == 'prod'
+        run: gcloud container clusters get-credentials ${{ secrets.GKE_PROD_CLUSTER_NAME }} --region ${{ secrets.GKE_CLUSTER_REGION }} --project ${{ secrets.GCP_PROJECT_ID }}
+      
+      - name: Install Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+      
+      - name: Update deployment image tag
+        run: |
+          TAG=${{ steps.deployment_env.outputs.tag }}
+          ENV=${{ steps.deployment_env.outputs.environment }}
+          
+          # Create a kustomization overlay to set the image tag
+          cd auth-kustomize/overlays/$ENV
+          kustomize edit set image ghcr.io/${{ github.repository }}=ghcr.io/${{ github.repository }}:$TAG
+          
+          # Show the changes
+          echo "Deploying image with tag: $TAG"
+          cat kustomization.yaml
+      
+      - name: Apply Kustomize configuration for dev
+        if: steps.deployment_env.outputs.environment == 'dev'
+        run: |
+          kubectl apply -k auth-kustomize/overlays/dev
+      
+      - name: Apply Kustomize configuration for prod
+        if: steps.deployment_env.outputs.environment == 'prod'
+        run: |
+          kubectl apply -k auth-kustomize/overlays/prod
+      
+      - name: Verify deployment
+        timeout-minutes: 5
+        run: |
+          kubectl rollout status deployment/auth-api-deployment -n auth
+          kubectl rollout status deployment/auth-db-migration-deployment -n auth
+          
+          # Verify the image version was updated
+          DEPLOYED_IMAGE=$(kubectl get deployment/auth-api-deployment -n auth -o jsonpath='{.spec.template.spec.containers[0].image}')
+          echo "✅ Deployed image: $DEPLOYED_IMAGE"
+          
+          if [[ "$DEPLOYED_IMAGE" == *"${{ steps.deployment_env.outputs.tag }}"* ]]; then
+            echo "✅ Correct image tag deployed!"
+          else
+            echo "❌ Incorrect image tag deployed!"
+            exit 1
+          fi
+          
+          echo "✅ Deployment to ${{ steps.deployment_env.outputs.environment }} environment completed successfully!"
