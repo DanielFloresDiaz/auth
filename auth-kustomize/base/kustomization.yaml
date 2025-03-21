@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: zion
+
+resources:
+  - deployment.yaml
+  
+configMapGenerator:
+  - name: zion-generated-config
+    literals:
+      - LOG-LEVEL=info

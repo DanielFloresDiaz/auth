@@ -1,0 +1,324 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-deployment
+  namespace: auth
+  labels:
+    app: auth
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth
+  template:
+    metadata:
+      labels:
+        app: auth
+    spec:
+      serviceAccountName: auth-service-account
+      imagePullSecrets:
+        - name: ghcr-secret
+      volumes:
+        - name: secrets-store-volume
+          csi:
+            driver: secrets-store-gke.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: "auth-secrets"
+        - name: env-vars
+          emptyDir: {}
+      initContainers:
+        - name: secret-setup
+          image: busybox:latest
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+          command:
+            - "/bin/sh"
+            - "-c"
+            - |
+              set -e
+              for file in /mnt/secrets/*; do
+                filename=$(basename $file)
+                # Convert filename to uppercase and replace underscores
+                envname=$(echo $filename | tr 'a-z' 'A-Z' | tr '_' '_')
+                echo "export $envname=\"$(cat $file)\"" >> /env-vars/env-secrets.sh
+              done
+          volumeMounts:
+            - name: secrets-store-volume
+              mountPath: "/mnt/secrets"
+              readOnly: true
+            - name: env-vars
+              mountPath: "/env-vars"
+      containers:
+        - name: auth-container
+          image: ghcr.io/danielfloresdiaz/auth:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9999
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9999
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9999
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          command:
+            - "/bin/sh"
+            - "-c"
+            - |
+              echo "Waiting for Cloud SQL Proxy to be ready..."
+              max_attempts=60
+              attempts=0
+              while ! nc -z localhost 5432; do
+                attempts=$((attempts+1))
+                if [ $attempts -ge $max_attempts ]; then
+                  echo "Cloud SQL Proxy failed to start after 2 minutes. Exiting."
+                  exit 1
+                fi
+                echo "Waiting for Cloud SQL Proxy... (attempt $attempts/$max_attempts)"
+                sleep 2
+              done
+              echo "Cloud SQL Proxy is ready!"
+              . /env-vars/env-secrets.sh
+              exec auth
+          env:  
+            # JWT Configuration
+            - name: GOTRUE_JWT_EXP
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_JWT_EXP
+            - name: GOTRUE_JWT_AUD
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_JWT_AUD
+            - name: GOTRUE_JWT_DEFAULT_GROUP_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_JWT_DEFAULT_GROUP_NAME
+            - name: GOTRUE_JWT_ADMIN_ROLES
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_JWT_ADMIN_ROLES
+            
+            # Database Configuration
+            - name: GOTRUE_DB_DRIVER
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_DB_DRIVER
+            - name: DB_NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: DB_NAMESPACE
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_HOST
+              value: "localhost"
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: DB_NAME
+            - name: DB_ADMIN
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: DB_ADMIN
+            
+            # API Configuration
+            - name: API_EXTERNAL_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: API_EXTERNAL_URL
+            - name: GOTRUE_API_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_API_HOST
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: PORT
+            
+            # OAuth Configuration
+            - name: GOTRUE_EXTERNAL_GOOGLE_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_EXTERNAL_GOOGLE_ENABLED
+            - name: GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI
+            
+            # Security Configuration
+            - name: GOTRUE_LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_LOG_LEVEL
+            # Signup Configuration
+            - name: GOTRUE_DISABLE_SIGNUP
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_DISABLE_SIGNUP
+            - name: GOTRUE_SITE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_SITE_URL
+            - name: GOTRUE_EXTERNAL_EMAIL_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_EXTERNAL_EMAIL_ENABLED
+            - name: GOTRUE_EXTERNAL_PHONE_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_EXTERNAL_PHONE_ENABLED
+            - name: GOTRUE_EXTERNAL_IOS_BUNDLE_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_EXTERNAL_IOS_BUNDLE_ID
+                  
+            # Anonymous auth config
+            - name: GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED
+                  
+            # PKCE Config
+            - name: GOTRUE_EXTERNAL_FLOW_STATE_EXPIRY_DURATION
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_EXTERNAL_FLOW_STATE_EXPIRY_DURATION
+                  
+            # Phone provider config
+            - name: GOTRUE_SMS_AUTOCONFIRM
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_SMS_AUTOCONFIRM
+                  
+            # Captcha config
+            - name: GOTRUE_SECURITY_CAPTCHA_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_SECURITY_CAPTCHA_ENABLED
+                  
+            # SAML config
+            - name: GOTRUE_EXTERNAL_SAML_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_EXTERNAL_SAML_ENABLED
+                  
+            # Additional Security config
+            - name: GOTRUE_RATE_LIMIT_HEADER
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_RATE_LIMIT_HEADER
+            - name: GOTRUE_RATE_LIMIT_EMAIL_SENT
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_RATE_LIMIT_EMAIL_SENT
+            - name: GOTRUE_PASSWORD_MIN_LENGTH
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_PASSWORD_MIN_LENGTH
+            - name: GOTRUE_PASSWORD_REQUIRED_CHARACTERS
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_PASSWORD_REQUIRED_CHARACTERS
+            - name: GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED
+            - name: GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL
+                  
+            # Auth Hook Configuration
+            - name: GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_ENABLED
+            - name: GOTRUE_HOOK_CUSTOM_SMS_PROVIDER_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-config
+                  key: GOTRUE_HOOK_CUSTOM_SMS_PROVIDER_ENABLED  
+          volumeMounts:
+            - name: secrets-store-volume
+              mountPath: "/mnt/secrets"
+              readOnly: true
+            - name: env-vars
+              mountPath: "/env-vars"
+        # Cloud SQL Auth Proxy sidecar
+        - name: cloudsql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:latest
+          imagePullPolicy: Always
+          command:
+            - "/cloud-sql-proxy"
+            - "--private-ip"
+            - "--structured-logs"
+            - "--port=5432"
+            - "--address=0.0.0.0"
+            - "solomon-440015:europe-southwest1:solomon"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "100m"
+              memory: "256Mi"
+          ports:
+            - containerPort: 5432
+          securityContext:
+            runAsNonRoot: true
