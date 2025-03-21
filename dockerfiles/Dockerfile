@@ -27,5 +27,7 @@ RUN ln -s /usr/local/bin/auth /usr/local/bin/gotrue
 
 ENV GOTRUE_DB_MIGRATIONS_PATH /usr/local/etc/auth/migrations
 
+EXPOSE 9999
+
 USER supabase
 CMD ["auth"]
