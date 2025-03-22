@@ -86,10 +86,10 @@ format:
 	gofmt -s -w .
 
 kapply-rec: ## Apply all YAML files in auth-kubernetes directory recursively.
-    kubectl apply -f auth-kubernetes --recursive
+	kubectl apply -f auth-kubernetes --recursive
 
 kapply-kustomize-dev: ## Apply kustomization in auth-kustomize/overlays/dev
-    kubectl apply -k auth-kustomize/overlays/dev
+	kubectl apply -k auth-kustomize/overlays/dev
 
 kapply-kustomize-prod: ## Apply kustomization in auth-kustomize/overlays/prod
-    kubectl apply -k auth-kustomize/overlays/prod
+	kubectl apply -k auth-kustomize/overlays/prod
