@@ -10,10 +10,12 @@ spec:
   selector:
     matchLabels:
       app: auth
+      environment: prod
   template:
     metadata:
       labels:
         app: auth
+        environment: prod
     spec:
       serviceAccountName: auth-service-account
       imagePullSecrets:
