@@ -18,4 +18,4 @@ npm-debug.log
 .data
 
 bind-secrets.sh
-auth-kubernetes/secrets
+k8s-secrets
