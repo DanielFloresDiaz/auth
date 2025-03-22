@@ -5,6 +5,7 @@ namespace: auth
 
 resources:
   - deployment.yaml
+  - ingress.yaml
   
 configMapGenerator:
   - name: auth-config
