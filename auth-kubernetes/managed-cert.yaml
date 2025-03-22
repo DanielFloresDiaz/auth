@@ -6,4 +6,5 @@ metadata:
 spec:
   domains:
     - solomon-auth.com
+    - dev.solomon-auth.com
 
