@@ -12,14 +12,13 @@ metadata:
     networking.gke.io/managed-certificates: "auth-cert"
   labels:
     app: auth
-    environment: dev
 spec:
   ingressClassName: "gce"
   rules:
   - host: solomon-auth.com
     http:
       paths:
-        - path: /auth/*
+        - path: /*
           pathType: ImplementationSpecific
           backend:
             service:
