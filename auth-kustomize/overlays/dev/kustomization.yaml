@@ -6,8 +6,8 @@ resources:
 
 namespace: auth
 
-patchesStrategicMerge:
-  - patch.yaml
+patches:
+  - path: patch.yaml
 
 labels:
 - pairs:
