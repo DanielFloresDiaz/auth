@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - ../../base
+  - ingress.yaml
 
 namespace: auth
 
@@ -11,3 +12,9 @@ labels:
     environment: prod
     tier: prod
   includeSelectors: true
+
+configMapGenerator:
+  - name: auth-generated-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=prod

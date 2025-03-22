@@ -3,8 +3,11 @@ kind: Kustomization
 
 resources:
   - ../../base
+  - ingress.yaml
 
 namespace: auth
+
+namePrefix: dev-
 
 patches:
   - path: patch.yaml
@@ -14,3 +17,9 @@ labels:
     environment: dev
     tier: dev
   includeSelectors: true
+
+configMapGenerator:
+  - name: auth-generated-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=dev

@@ -5,9 +5,8 @@ namespace: auth
 
 resources:
   - deployment.yaml
-  - ingress.yaml
   
 configMapGenerator:
-  - name: auth-config
+  - name: auth-generated-config
     literals:
       - LOG-LEVEL=info
