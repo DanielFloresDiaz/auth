@@ -1,4 +1,4 @@
-.PHONY: all build deps dev-deps image migrate test vet sec format unused
+.PHONY: all build deps dev-deps image migrate test vet sec format unused static generate dev down docker-test docker-build docker-clean kapply-rec kustomize-dev kustomize-prod
 CHECK_FILES?=./...
 
 FLAGS=-ldflags "-X github.com/supabase/auth/internal/utilities.Version=`git describe --tags`" -buildvcs=false
@@ -88,8 +88,8 @@ format:
 kapply-rec: ## Apply all YAML files in auth-kubernetes directory recursively.
 	kubectl apply -f auth-kubernetes --recursive
 
-kapply-kustomize-dev: ## Apply kustomization in auth-kustomize/overlays/dev
+kustomize-dev: ## Apply kustomization in auth-kustomize/overlays/dev
 	kubectl apply -k auth-kustomize/overlays/dev
 
-kapply-kustomize-prod: ## Apply kustomization in auth-kustomize/overlays/prod
+kustomize-prod: ## Apply kustomization in auth-kustomize/overlays/prod
 	kubectl apply -k auth-kustomize/overlays/prod
