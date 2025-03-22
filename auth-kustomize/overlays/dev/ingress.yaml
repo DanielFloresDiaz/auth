@@ -16,13 +16,13 @@ metadata:
 spec:
   ingressClassName: "gce"
   rules:
-  - host: solomon-auth.com
+  - host: dev.solomon-auth.com
     http:
       paths:
         - path: /*
           pathType: ImplementationSpecific
           backend:
             service:
-              name: auth-service
+              name: auth-service-dev
               port:
                 number: 9999
