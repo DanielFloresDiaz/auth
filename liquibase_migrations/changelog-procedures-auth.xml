@@ -318,4 +318,22 @@
         DROP FUNCTION assign_project_id_if_missing();
     </rollback>
 </changeSet>
+
+<changeSet author="admin" id="solomon.public.functions:7">
+    <createProcedure
+           dbms="postgresql">
+        DROP FUNCTION prevent_set_both_organization_and_project();
+        DROP TRIGGER prevent_change_organization_project ON "auth"."identities";
+        CREATE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_change_organization_project();
+        CREATE TRIGGER prevent_set_project_id BEFORE UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_set_project_id();
+        CREATE TRIGGER prevent_organization_project_null BEFORE INSERT OR UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_organization_project_null();
+        CREATE TRIGGER trigger_assign_project_id_before_insert BEFORE INSERT ON auth.identities FOR EACH ROW EXECUTE FUNCTION assign_project_id_if_missing();
+    </createProcedure>
+    <rollback>
+        DROP TRIGGER prevent_change_organization_project ON "auth"."identities";
+        DROP TRIGGER prevent_set_project_id ON "auth"."identities";
+        DROP TRIGGER prevent_organization_project_null ON "auth"."identities";
+        DROP TRIGGER trigger_assign_project_id_before_insert ON auth.identities;
+    </rollback>
+</changeSet>
 </databaseChangeLog>
