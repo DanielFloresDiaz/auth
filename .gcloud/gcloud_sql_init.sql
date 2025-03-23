@@ -21,7 +21,9 @@ GRANT USAGE ON SCHEMA auth TO solomon_role;
 GRANT auth_admin_role TO auth_admin;
 
 -- Set search paths for existing users
-ALTER USER auth_admin SET search_path TO auth;
+ALTER ROLE auth_admin SET search_path TO auth;
+ALTER ROLE solomon_role SET search_path TO auth;
+
 
 -- Grant these roles to existing users if needed
 -- GRANT solomon_role TO solomon_admin;
