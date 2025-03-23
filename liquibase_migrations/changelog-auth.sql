@@ -326,3 +326,8 @@ GRANT SELECT ON "auth".organizations TO solomon_role;
 --comment: grant select on tier_organizations_tiers to solomon_role
 GRANT SELECT ON "auth".tier_organizations_tiers TO solomon_role;
 --rollback REVOKE SELECT ON "auth".tier_organizations_tiers FROM solomon_role;
+
+--changeset solomon.auth:grant:6 labels:auth context:auth
+--comment: grant delete on project_rate_limits to solomon_role
+GRANT DELETE ON "auth".project_rate_limits TO solomon_role;
+--rollback REVOKE DELETE ON "auth".project_rate_limits FROM solomon_role;
