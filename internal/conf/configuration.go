@@ -83,7 +83,12 @@ type EmailProviderConfiguration struct {
 // DBConfiguration holds all the database related configuration.
 type DBConfiguration struct {
 	Driver    string `json:"driver" required:"true"`
-	URL       string `json:"url" envconfig:"DATABASE_URL" required:"true"`
+	URL       string `json:"url" envconfig:"DATABASE_URL"`
+	Host      string `json:"host" envconfig:"DB_HOST"`
+	Port      string `json:"port" envconfig:"DB_PORT" default:"5432"`
+	User      string `json:"user" envconfig:"DB_USER" default:"postgres"`
+	Password  string `json:"password" envconfig:"DB_PASSWORD"`
+	Name      string `json:"name" envconfig:"DB_NAME"`
 	Namespace string `json:"namespace" envconfig:"DB_NAMESPACE" default:"auth"`
 	// MaxPoolSize defaults to 0 (unlimited).
 	MaxPoolSize       int           `json:"max_pool_size" split_words:"true"`
@@ -96,6 +101,37 @@ type DBConfiguration struct {
 }
 
 func (c *DBConfiguration) Validate() error {
+	// If DATABASE_URL is not provided, construct it from individual components
+	if c.URL == "" {
+		if c.Driver == "" {
+			return errors.New("either DATABASE_URL or DB_DRIVER must be provided")
+		}
+		if c.Host == "" {
+			return errors.New("either DATABASE_URL or DB_HOST must be provided")
+		}
+		if c.Port == "" {
+			return errors.New("either DATABASE_URL or DB_PORT must be provided")
+		}
+		if c.User == "" {
+			return errors.New("either DATABASE_URL or DB_USER must be provided")
+		}
+		if c.Name == "" {
+			return errors.New("either DATABASE_URL or DB_NAME must be provided")
+		}
+		if c.Password == "" {
+			return errors.New("either DATABASE_URL or DB_PASSWORD must be provided")
+		}
+
+		// Build connection string in the format driver://user:password@host:port/db_name
+		c.URL = fmt.Sprintf("%s://%s:%s@%s:%s/%s",
+			c.Driver,
+			c.User,
+			c.Password,
+			c.Host,
+			c.Port,
+			c.Name)
+	}
+
 	return nil
 }
 
