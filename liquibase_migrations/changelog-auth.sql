@@ -213,6 +213,35 @@ CREATE TABLE IF NOT EXISTS "auth".project_rate_limits (
 );
 --rollback DROP TABLE "auth".project_rate_limits
 
+--changeset solomon.auth:18 labels:auth context:auth
+--comment: Drop unique constraint for users
+ALTER TABLE "auth".users DROP CONSTRAINT users_email_organization_id_unique;
+ALTER TABLE "auth".users DROP CONSTRAINT users_email_project_id_unique;
+ALTER TABLE "auth".users DROP CONSTRAINT users_phone_organization_id_unique;
+ALTER TABLE "auth".users DROP CONSTRAINT users_phone_project_id_unique;
+--rollback ALTER TABLE "auth".users ADD CONSTRAINT users_email_organization_id_unique UNIQUE (email, organization_id);
+--rollback ALTER TABLE "auth".users ADD CONSTRAINT users_email_project_id_unique UNIQUE (email, project_id);
+--rollback ALTER TABLE "auth".users ADD CONSTRAINT users_phone_organization_id_unique UNIQUE (phone, organization_id);
+--rollback ALTER TABLE "auth".users ADD CONSTRAINT users_phone_project_id_unique UNIQUE (phone, project_id);
+
+--changeset solomon.auth:19 labels:auth context:auth
+--comment: Add uniqueness constraint for users -> email, project_id, organization_id and phone, project_id, organization_id
+ALTER TABLE "auth".users ADD CONSTRAINT users_email_project_id_org_unique UNIQUE (email, project_id, organization_id);
+ALTER TABLE "auth".users ADD CONSTRAINT users_phone_project_id_org_unique UNIQUE (phone, project_id, organization_id);
+--rollback ALTER TABLE "auth".users DROP CONSTRAINT users_email_project_id_org_unique;
+--rollback ALTER TABLE "auth".users DROP CONSTRAINT users_phone_project_id_org_unique;
+
+--changeset solomon.auth:20 labels:auth context:auth
+--comment: Add uniqueness constraint for users with NULL organization_id and same email, project_id and phone, project_id
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_project_id_org_null_unique 
+ON "auth".users (email, project_id) 
+WHERE organization_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS users_phone_project_id_org_null_unique
+ON "auth".users (phone, project_id)
+WHERE organization_id IS NULL;
+--rollback DROP INDEX IF EXISTS "auth".users_email_project_id_org_null_unique;
+--rollback DROP INDEX IF EXISTS "auth".users_phone_project_id_org_null_unique;
+
 --changeset solomon.auth-index:1 labels:auth context:auth
 --comment: create index on tier_organizations_tiers tier
 CREATE UNIQUE INDEX IF NOT EXISTS tier_organizations_tiers_tier_index ON "auth".tier_organizations_tiers (tier);
