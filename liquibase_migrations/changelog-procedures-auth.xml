@@ -322,8 +322,8 @@
 <changeSet author="admin" id="solomon.public.functions:7">
     <createProcedure
            dbms="postgresql">
-        DROP FUNCTION prevent_set_both_organization_and_project();
         DROP TRIGGER prevent_change_organization_project ON "auth"."identities";
+        DROP FUNCTION prevent_set_both_organization_and_project();
         CREATE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_change_organization_project();
         CREATE TRIGGER prevent_set_project_id BEFORE UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_set_project_id();
         CREATE TRIGGER prevent_organization_project_null BEFORE INSERT OR UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_organization_project_null();
