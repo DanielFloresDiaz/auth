@@ -150,11 +150,11 @@ spec:
                 configMapKeyRef:
                   name: auth-config
                   key: DB_NAME
-            - name: DB_ADMIN
+            - name: DB_USER
               valueFrom:
                 configMapKeyRef:
                   name: auth-config
-                  key: DB_ADMIN
+                  key: DB_USER
             
             # API Configuration
             - name: API_EXTERNAL_URL
