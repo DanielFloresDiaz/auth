@@ -23,7 +23,7 @@ data:
   PORT: "9999"
 
   # Database Users
-  DB_ADMIN: "auth_admin"
+  DB_USER: "auth_admin"
   
   # Signup Configuration
   GOTRUE_DISABLE_SIGNUP: "false"
