@@ -15,6 +15,14 @@ spec:
       containers:
         - name: auth-container
           image: ghcr.io/danielfloresdiaz/auth:dev
+          env:
+            - name: GOTRUE_LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-generated-config
+                  key: LOG-LEVEL
+            - name: DB_NAME
+              value: "postgres_auth_dev"
           resources:
             requests:
               cpu: "50m"
