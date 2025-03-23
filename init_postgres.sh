@@ -26,4 +26,13 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     
     -- Assign users to roles
     GRANT solomon_role TO zion_user, brawler_user, zion_admin, brawler_admin;
+    
+    -- Set search paths for existing users and roles
+    ALTER ROLE solomon_role SET search_path TO $DB_NAMESPACE;
+    ALTER ROLE $AUTH_DB_ADMIN SET search_path TO $DB_NAMESPACE;
+    ALTER ROLE supabase_admin SET search_path TO $DB_NAMESPACE;
+    ALTER ROLE zion_user SET search_path TO $DB_NAMESPACE;
+    ALTER ROLE zion_admin SET search_path TO $DB_NAMESPACE;
+    ALTER ROLE brawler_user SET search_path TO $DB_NAMESPACE;
+    ALTER ROLE brawler_admin SET search_path TO $DB_NAMESPACE;
 EOSQL
