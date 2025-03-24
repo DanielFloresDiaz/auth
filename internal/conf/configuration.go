@@ -83,7 +83,12 @@ type EmailProviderConfiguration struct {
 // DBConfiguration holds all the database related configuration.
 type DBConfiguration struct {
 	Driver    string `json:"driver" required:"true"`
-	URL       string `json:"url" envconfig:"DATABASE_URL" required:"true"`
+	URL       string `json:"url" envconfig:"DATABASE_URL"`
+	Host      string `json:"host" envconfig:"DB_HOST"`
+	Port      string `json:"port" envconfig:"DB_PORT" default:"5432"`
+	User      string `json:"user" envconfig:"DB_USER" default:"postgres"`
+	Password  string `json:"password" envconfig:"DB_PASSWORD"`
+	Name      string `json:"name" envconfig:"DB_NAME"`
 	Namespace string `json:"namespace" envconfig:"DB_NAMESPACE" default:"auth"`
 	// MaxPoolSize defaults to 0 (unlimited).
 	MaxPoolSize       int           `json:"max_pool_size" split_words:"true"`
@@ -96,6 +101,37 @@ type DBConfiguration struct {
 }
 
 func (c *DBConfiguration) Validate() error {
+	// If DATABASE_URL is not provided, construct it from individual components
+	if c.URL == "" {
+		if c.Driver == "" {
+			return errors.New("either DATABASE_URL or DB_DRIVER must be provided")
+		}
+		if c.Host == "" {
+			return errors.New("either DATABASE_URL or DB_HOST must be provided")
+		}
+		if c.Port == "" {
+			return errors.New("either DATABASE_URL or DB_PORT must be provided")
+		}
+		if c.User == "" {
+			return errors.New("either DATABASE_URL or DB_USER must be provided")
+		}
+		if c.Name == "" {
+			return errors.New("either DATABASE_URL or DB_NAME must be provided")
+		}
+		if c.Password == "" {
+			return errors.New("either DATABASE_URL or DB_PASSWORD must be provided")
+		}
+
+		// Build connection string in the format driver://user:password@host:port/db_name
+		c.URL = fmt.Sprintf("%s://%s:%s@%s:%s/%s",
+			c.Driver,
+			c.User,
+			c.Password,
+			c.Host,
+			c.Port,
+			c.Name)
+	}
+
 	return nil
 }
 
@@ -403,7 +439,7 @@ type MailerConfiguration struct {
 	// EXPERIMENTAL: May be removed in a future release.
 	EmailValidationExtended       bool   `json:"email_validation_extended" split_words:"true" default:"false"`
 	EmailValidationServiceURL     string `json:"email_validation_service_url" split_words:"true"`
-	EmailValidationServiceHeaders string `json:"email_validation_service_key" split_words:"true"`
+	EmailValidationServiceHeaders string `json:"email_validation_service_headers" split_words:"true"`
 
 	serviceHeaders map[string][]string `json:"-"`
 }
@@ -414,7 +450,7 @@ func (c *MailerConfiguration) Validate() error {
 	if c.EmailValidationServiceHeaders != "" {
 		err := json.Unmarshal([]byte(c.EmailValidationServiceHeaders), &headers)
 		if err != nil {
-			return fmt.Errorf("conf: SMTP headers not a map[string][]string format: %w", err)
+			return fmt.Errorf("conf: mailer validation headers not a map[string][]string format: %w", err)
 		}
 	}
 
@@ -767,8 +803,15 @@ func LoadDirectory(configDir string) error {
 	// If at least one path was found we load the configuration files in the
 	// directory. We don't call override without config files because it will
 	// override the env vars previously set with a ".env", if one exists.
-	if len(paths) > 0 {
-		if err := godotenv.Overload(paths...); err != nil {
+	return loadDirectoryPaths(paths...)
+}
+
+func loadDirectoryPaths(p ...string) error {
+	// If at least one path was found we load the configuration files in the
+	// directory. We don't call override without config files because it will
+	// override the env vars previously set with a ".env", if one exists.
+	if len(p) > 0 {
+		if err := godotenv.Overload(p...); err != nil {
 			return err
 		}
 	}
@@ -811,7 +854,10 @@ func loadGlobal(config *GlobalConfiguration) error {
 	if err := config.Validate(); err != nil {
 		return err
 	}
+	return populateGlobal(config)
+}
 
+func populateGlobal(config *GlobalConfiguration) error {
 	if config.Hook.PasswordVerificationAttempt.Enabled {
 		if err := config.Hook.PasswordVerificationAttempt.PopulateExtensibilityPoint(); err != nil {
 			return err
@@ -892,36 +938,8 @@ func (config *GlobalConfiguration) ApplyDefaults() error {
 
 	if len(config.JWT.Keys) == 0 {
 		// transform the secret into a JWK for consistency
-		privKey, err := jwk.FromRaw([]byte(config.JWT.Secret))
-		if err != nil {
+		if err := config.applyDefaultsJWT([]byte(config.JWT.Secret)); err != nil {
 			return err
-		}
-		if config.JWT.KeyID != "" {
-			if err := privKey.Set(jwk.KeyIDKey, config.JWT.KeyID); err != nil {
-				return err
-			}
-		}
-		if privKey.Algorithm().String() == "" {
-			if err := privKey.Set(jwk.AlgorithmKey, jwt.SigningMethodHS256.Name); err != nil {
-				return err
-			}
-		}
-		if err := privKey.Set(jwk.KeyUsageKey, "sig"); err != nil {
-			return err
-		}
-		if len(privKey.KeyOps()) == 0 {
-			if err := privKey.Set(jwk.KeyOpsKey, jwk.KeyOperationList{jwk.KeyOpSign, jwk.KeyOpVerify}); err != nil {
-				return err
-			}
-		}
-		pubKey, err := privKey.PublicKey()
-		if err != nil {
-			return err
-		}
-		config.JWT.Keys = make(JwtKeysDecoder)
-		config.JWT.Keys[config.JWT.KeyID] = JwkInfo{
-			PublicKey:  pubKey,
-			PrivateKey: privKey,
 		}
 	}
 
@@ -1034,6 +1052,45 @@ func (config *GlobalConfiguration) ApplyDefaults() error {
 		config.External.AllowedIdTokenIssuers = append(config.External.AllowedIdTokenIssuers, "https://appleid.apple.com", "https://accounts.google.com")
 	}
 
+	return nil
+}
+func (config *GlobalConfiguration) applyDefaultsJWT(secret []byte) error {
+	// transform the secret into a JWK for consistency
+	privKey, err := jwk.FromRaw(secret)
+	if err != nil {
+		return err
+	}
+	return config.applyDefaultsJWTPrivateKey(privKey)
+}
+
+func (config *GlobalConfiguration) applyDefaultsJWTPrivateKey(privKey jwk.Key) error {
+	if config.JWT.KeyID != "" {
+		if err := privKey.Set(jwk.KeyIDKey, config.JWT.KeyID); err != nil {
+			return err
+		}
+	}
+	if privKey.Algorithm().String() == "" {
+		if err := privKey.Set(jwk.AlgorithmKey, jwt.SigningMethodHS256.Name); err != nil {
+			return err
+		}
+	}
+	if err := privKey.Set(jwk.KeyUsageKey, "sig"); err != nil {
+		return err
+	}
+	if len(privKey.KeyOps()) == 0 {
+		if err := privKey.Set(jwk.KeyOpsKey, jwk.KeyOperationList{jwk.KeyOpSign, jwk.KeyOpVerify}); err != nil {
+			return err
+		}
+	}
+	pubKey, err := privKey.PublicKey()
+	if err != nil {
+		return err
+	}
+	config.JWT.Keys = make(JwtKeysDecoder)
+	config.JWT.Keys[config.JWT.KeyID] = JwkInfo{
+		PublicKey:  pubKey,
+		PrivateKey: privKey,
+	}
 	return nil
 }
 

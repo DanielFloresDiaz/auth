@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: auth-ingress
+  namespace: auth
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: "auth-ip"
+    kubernetes.io/ingress.class: "gce"
+    # Force HTTPS
+    networking.gke.io/v1beta1.FrontendConfig: "auth-frontend-config"
+    # Use managed certificate
+    networking.gke.io/managed-certificates: "auth-cert"
+  labels:
+    app: auth
+spec:
+  ingressClassName: "gce"
+  rules:
+  - host: dev.solomon-auth.com
+    http:
+      paths:
+        - path: /*
+          pathType: ImplementationSpecific
+          backend:
+            service:
+              name: auth-service-dev
+              port:
+                number: 9999

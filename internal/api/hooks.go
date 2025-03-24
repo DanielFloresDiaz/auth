@@ -14,15 +14,18 @@ import (
 	"time"
 
 	"auth/internal/observability"
+
 	"github.com/gofrs/uuid"
 
 	"auth/internal/conf"
-	"auth/internal/crypto"
 
 	"auth/internal/hooks"
+
 	"github.com/sirupsen/logrus"
 
 	"auth/internal/storage"
+
+	standardwebhooks "github.com/standard-webhooks/standard-webhooks/libraries/go"
 )
 
 const (
@@ -103,7 +106,7 @@ func (a *API) runHTTPHook(r *http.Request, hookConfig conf.ExtensibilityPointCon
 		}
 		msgID := uuid.Must(uuid.NewV4())
 		currentTime := time.Now()
-		signatureList, err := crypto.GenerateSignatures(hookConfig.HTTPHookSecrets, msgID, currentTime, inputPayload)
+		signatureList, err := generateSignatures(hookConfig.HTTPHookSecrets, msgID, currentTime, inputPayload)
 		if err != nil {
 			return nil, err
 		}
@@ -381,4 +384,27 @@ func (a *API) runHook(r *http.Request, conn *storage.Connection, hookConfig conf
 	}).WithError(err).Info("Hook ran successfully")
 
 	return response, nil
+}
+
+func generateSignatures(secrets []string, msgID uuid.UUID, currentTime time.Time, inputPayload []byte) ([]string, error) {
+	SymmetricSignaturePrefix := "v1,"
+	// TODO(joel): Handle asymmetric case once library has been upgraded
+	var signatureList []string
+	for _, secret := range secrets {
+		if strings.HasPrefix(secret, SymmetricSignaturePrefix) {
+			trimmedSecret := strings.TrimPrefix(secret, SymmetricSignaturePrefix)
+			wh, err := standardwebhooks.NewWebhook(trimmedSecret)
+			if err != nil {
+				return nil, err
+			}
+			signature, err := wh.Sign(msgID.String(), currentTime, inputPayload)
+			if err != nil {
+				return nil, err
+			}
+			signatureList = append(signatureList, signature)
+		} else {
+			return nil, errors.New("invalid signature format")
+		}
+	}
+	return signatureList, nil
 }

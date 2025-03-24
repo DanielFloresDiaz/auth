@@ -1,0 +1,389 @@
+name: CI-CD
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - '*'
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.toml'
+      - '**/*.lock'
+      - '**/*.json'
+      - '**/*.txt'
+      - '**/*.env'
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.toml'
+      - '**/*.lock'
+      - '**/*.json'
+      - '**/*.txt'
+      - '**/*.env'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write  # Add permission to push to GHCR
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.23.7
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Check gofmt
+        run: |
+          set -x
+
+          if [ ! -z $(gofmt -l .) ]
+          then
+            echo 'Make sure to run "gofmt -s -w ." before commit!' && exit 1
+          fi
+      - name: Check go vet
+        run: |
+          set -x
+          go vet ./...
+      - name: Run static check
+        run: |
+          set -x
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          go install github.com/nishanths/exhaustive/cmd/exhaustive@latest
+          make static
+      - name: Check gosec
+        run: |
+          set -x
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          make sec
+
+  test:
+    if: ${{ !contains(github.event.head_commit.message, '[skip test]') }}
+    needs: [lint]
+    strategy:
+      matrix:
+        go-version: [1.23.7]
+    runs-on: ubuntu-20.04
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: root
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Init Database
+        run: psql -f hack/init_postgres.sql postgresql://postgres:root@localhost:5432/postgres
+      - name: Run migrations
+        run: make migrate_dev
+      - name: Run extra migrations
+        uses: liquibase-github-actions/update@v4.30.0
+        with:
+          changelogFile: 'liquibase_migrations/changelog-test.sql'
+          url: 'jdbc:postgresql://postgres:5432/postgres'
+          username: 'auth_admin'
+          password: 'root'
+          rollbackOnError: 'true'
+      - name: Run tests
+        run: make test
+      - name: Store coverage file
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-file
+          path: coverage.out
+          retention-days: 1
+
+  coverage:
+    needs: [test]
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.23.7
+      - name: Download coverage file
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-file
+      - name: Cleanup coverage
+        run: |
+          set -x
+
+          # since Go 1.20 these source files need to be deleted from the
+          # coverage profile as they contain legacy or untestable code (like
+          # `main` package)
+
+          sed -i '/^github.com\/supabase\/auth\/client/d' coverage.out
+          sed -i '/^github.com\/supabase\/auth\/cmd/d' coverage.out
+          sed -i '/^github.com\/supabase\/auth\/docs/d' coverage.out
+          sed -i '/^github.com\/supabase\/auth\/main/d' coverage.out
+      
+      - name: Generate coverage XML
+        run: |
+          go tool cover -html=coverage.out -o coverage.html
+          go install github.com/axw/gocov/gocov@latest
+          go install github.com/AlekSi/gocov-xml@latest
+          gocov convert coverage.out | gocov-xml > coverage.xml
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.xml
+          fail_ci_if_error: true
+          verbose: true
+      
+      - uses: shogo82148/actions-goveralls@v1
+        with:
+          path-to-profile: coverage.out
+
+  # Add check-skip job for when tests are skipped
+  check-skip:
+    if: ${{ contains(github.event.head_commit.message, '[skip test]') }}
+    needs: [lint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip tests
+        run: echo "Tests skipped but proceeding with workflow"
+
+  # https://github.com/marketplace/actions/alls-green#why used for branch protection checks
+  check:
+    if: ${{ !contains(github.event.head_commit.message, '[skip test]') }}
+    needs: [lint, test, coverage]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decide whether the needed jobs succeeded or failed
+        uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
+
+  release:
+    # Depend on both check and check-skip jobs
+    needs: [check, check-skip]
+    # Run if either check or check-skip succeeded, and we're on a tag
+    if: |
+      always() &&
+      ((needs.check.result == 'success') || (needs.check-skip.result == 'success')) &&
+      startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write  # Required for pushing to GHCR
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.23.7
+          
+      # Extract version from GitHub tag
+      - name: Extract version from Git tag
+        id: tag_version
+        run: |
+          # Extract the version string from GITHUB_REF (refs/tags/v1.2.3 or refs/tags/1.2.3)
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION=$TAG
+          # Check if this is a dev tag
+          if [[ $TAG == dev* ]]; then
+            IS_DEV_TAG="true"
+            VERSION="dev"  # Fixed tag for all development builds
+          else
+            IS_DEV_TAG="false"
+            VERSION=$TAG
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_dev_tag=$IS_DEV_TAG" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION from tag $TAG (dev tag: $IS_DEV_TAG)"
+          
+      - name: Build binaries
+        run: |
+          CGO_ENABLED=0 go build -ldflags "-X github.com/supabase/auth/internal/utilities.Version=${GITHUB_REF#refs/tags/}" -o auth
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/supabase/auth/internal/utilities.Version=${GITHUB_REF#refs/tags/}" -o auth-linux-amd64
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-X github.com/supabase/auth/internal/utilities.Version=${GITHUB_REF#refs/tags/}" -o auth-linux-arm64
+      
+      # Docker build and push steps
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # For dev tags, use a single fixed "dev" tag
+            ${{ steps.tag_version.outputs.is_dev_tag == 'true' && format('type=raw,value={0}', steps.tag_version.outputs.version) || '' }}
+            # For production releases, use semantic versioning tags
+            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=raw,value=${{ steps.tag_version.outputs.version }}' || '' }}
+            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{version}}' || '' }}
+            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{major}}.{{minor}}' || '' }}
+            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{major}}' || '' }}
+            # Always include the commit SHA
+            type=sha,format=short
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          file: ./Dockerfile
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            RELEASE_VERSION=${{ steps.tag_version.outputs.version }}
+      
+      # Skip release creation for dev tags
+      - name: Create Release
+        if: steps.tag_version.outputs.is_dev_tag != 'true'
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            auth
+            auth-linux-amd64
+            auth-linux-arm64
+          tag_name: ${{ github.ref }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+
+  deploy:
+    needs: [release]
+    if: |
+      always() && (needs.release.result == 'success')
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      id-token: write # Needed for GCP authentication
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+      
+      # Authentication with Google Cloud
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+      
+      - name: Install gke-gcloud-auth-plugin
+        run: |
+          gcloud components install gke-gcloud-auth-plugin
+          echo 'export USE_GKE_GCLOUD_AUTH_PLUGIN=True' >> $GITHUB_ENV
+      
+      - name: Determine deployment environment
+        id: deployment_env
+        run: |
+          # Extract tag directly from GITHUB_REF
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          
+          if [[ $TAG == dev* ]]; then
+            echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "Deploying to development environment with tag: $TAG"
+          else
+            echo "environment=prod" >> $GITHUB_OUTPUT
+            echo "Deploying to production environment with tag: $TAG"
+          fi
+      
+      - name: Configure kubectl for dev
+        if: steps.deployment_env.outputs.environment == 'dev'
+        run: gcloud container clusters get-credentials ${{ secrets.GKE_DEV_CLUSTER_NAME }} --region ${{ secrets.GKE_CLUSTER_REGION }} --project ${{ secrets.GCP_PROJECT_ID }}
+      
+      - name: Configure kubectl for prod
+        if: steps.deployment_env.outputs.environment == 'prod'
+        run: gcloud container clusters get-credentials ${{ secrets.GKE_PROD_CLUSTER_NAME }} --region ${{ secrets.GKE_CLUSTER_REGION }} --project ${{ secrets.GCP_PROJECT_ID }}
+      
+      - name: Install Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+      
+      - name: Update deployment image tag
+        run: |
+          TAG=${{ steps.deployment_env.outputs.tag }}
+          ENV=${{ steps.deployment_env.outputs.environment }}
+          
+          # Create a kustomization overlay to set the image tag
+          cd auth-kustomize/overlays/$ENV
+          kustomize edit set image ghcr.io/${{ github.repository }}=ghcr.io/${{ github.repository }}:$TAG
+          
+          # Show the changes
+          echo "Deploying image with tag: $TAG"
+          cat kustomization.yaml
+      
+      - name: Apply Kustomize configuration for dev
+        if: steps.deployment_env.outputs.environment == 'dev'
+        run: |
+          kubectl apply -k auth-kustomize/overlays/dev
+      
+      - name: Apply Kustomize configuration for prod
+        if: steps.deployment_env.outputs.environment == 'prod'
+        run: |
+          kubectl apply -k auth-kustomize/overlays/prod
+      
+      - name: Verify deployment
+        timeout-minutes: 5
+        run: |
+          kubectl rollout status deployment/auth-api-deployment -n auth
+          kubectl rollout status deployment/auth-db-migration-deployment -n auth
+          
+          # Verify the image version was updated
+          DEPLOYED_IMAGE=$(kubectl get deployment/auth-api-deployment -n auth -o jsonpath='{.spec.template.spec.containers[0].image}')
+          echo "✅ Deployed image: $DEPLOYED_IMAGE"
+          
+          if [[ "$DEPLOYED_IMAGE" == *"${{ steps.deployment_env.outputs.tag }}"* ]]; then
+            echo "✅ Correct image tag deployed!"
+          else
+            echo "❌ Incorrect image tag deployed!"
+            exit 1
+          fi
+          
+          echo "✅ Deployment to ${{ steps.deployment_env.outputs.environment }} environment completed successfully!"

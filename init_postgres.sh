@@ -1,33 +1,38 @@
 #!/bin/bash
 set -e
 
-# psql -U postgres -c "ALTER SYSTEM SET log_statement = 'all';"
-# psql -U postgres -c "ALTER SYSTEM SET log_min_messages = 'NOTICE';"
-# psql -U postgres -c "SELECT pg_reload_conf();"
-
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
     CREATE USER supabase_admin LOGIN CREATEROLE CREATEDB REPLICATION BYPASSRLS;
+    CREATE USER $AUTH_DB_ADMIN NOINHERIT CREATEROLE LOGIN NOREPLICATION PASSWORD '$AUTH_DB_ADMIN_PASSWORD';
+    
+    -- Create pgcrypto extension with superuser privileges
+    CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-    -- Supabase super admin
-    CREATE USER supabase_auth_admin NOINHERIT CREATEROLE LOGIN NOREPLICATION PASSWORD '$POSTGRES_PASSWORD';
-    CREATE SCHEMA IF NOT EXISTS $DB_NAMESPACE AUTHORIZATION supabase_auth_admin;
-    GRANT CREATE ON DATABASE postgres TO supabase_auth_admin;
-    ALTER USER supabase_auth_admin SET search_path = '$DB_NAMESPACE';
-    GRANT ALL PRIVILEGES ON SCHEMA public TO supabase_auth_admin;
+    -- Create schema and grant permissions on schema level
+    CREATE SCHEMA IF NOT EXISTS $DB_NAMESPACE AUTHORIZATION $AUTH_DB_ADMIN;
+    GRANT ALL PRIVILEGES ON SCHEMA public TO $AUTH_DB_ADMIN;
 
-     --zion user
-    CREATE USER zion_user NOINHERIT LOGIN NOREPLICATION PASSWORD '$ZION_DB_USER_PASSWORD';
-    GRANT USAGE ON SCHEMA $DB_NAMESPACE TO zion_user;
-
-    -- zion admin
-    CREATE USER zion_admin NOINHERIT LOGIN NOREPLICATION PASSWORD '$ZION_DB_ADMIN_PASSWORD';
-    GRANT USAGE ON SCHEMA $DB_NAMESPACE TO zion_admin;
-
-    -- brawler user
-    CREATE USER brawler_user NOINHERIT LOGIN NOREPLICATION PASSWORD '$BRAWLER_DB_USER_PASSWORD';
-    GRANT USAGE ON SCHEMA $DB_NAMESPACE TO brawler_user;
-
-    -- brawler admin
-    CREATE USER brawler_admin NOINHERIT LOGIN NOREPLICATION PASSWORD '$BRAWLER_DB_ADMIN_PASSWORD';
-    GRANT USAGE ON SCHEMA $DB_NAMESPACE TO brawler_admin;
+    -- Create roles first
+    CREATE ROLE solomon_role;
+    
+    -- Grant permissions on schema level
+    GRANT USAGE ON SCHEMA $DB_NAMESPACE TO solomon_role;
+    
+    -- Create users and assign to roles
+    CREATE USER zion_user INHERIT LOGIN NOREPLICATION PASSWORD '$ZION_DB_USER_PASSWORD';
+    CREATE USER zion_admin INHERIT LOGIN NOREPLICATION PASSWORD '$ZION_DB_ADMIN_PASSWORD';
+    CREATE USER brawler_user INHERIT LOGIN NOREPLICATION PASSWORD '$BRAWLER_DB_USER_PASSWORD';
+    CREATE USER brawler_admin INHERIT LOGIN NOREPLICATION PASSWORD '$BRAWLER_DB_ADMIN_PASSWORD';
+    
+    -- Assign users to roles
+    GRANT solomon_role TO zion_user, brawler_user, zion_admin, brawler_admin;
+    
+    -- Set search paths for existing users and roles
+    ALTER ROLE solomon_role SET search_path TO $DB_NAMESPACE;
+    ALTER ROLE $AUTH_DB_ADMIN SET search_path TO $DB_NAMESPACE;
+    ALTER ROLE supabase_admin SET search_path TO $DB_NAMESPACE;
+    ALTER ROLE zion_user SET search_path TO $DB_NAMESPACE;
+    ALTER ROLE zion_admin SET search_path TO $DB_NAMESPACE;
+    ALTER ROLE brawler_user SET search_path TO $DB_NAMESPACE;
+    ALTER ROLE brawler_admin SET search_path TO $DB_NAMESPACE;
 EOSQL

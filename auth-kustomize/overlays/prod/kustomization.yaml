@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - ingress.yaml
+
+namespace: auth
+
+labels:
+- pairs:
+    environment: prod
+    tier: prod
+  includeSelectors: true
+
+configMapGenerator:
+  - name: auth-generated-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=prod

@@ -1,3 +1,49 @@
+# Already excluded
 /hack/
 /vendor/
 /www/
+
+# Build artifacts and binaries
+/auth
+/auth-arm64
+/auth.exe
+/gotrue
+/gotrue-arm64
+/gotrue.exe
+coverage.out
+
+# Git related
+/.git/
+/.github/
+/.gitattributes
+/.gitignore
+
+# Editor configs
+/.vscode/
+
+# Cloud configurations
+/.gcloud/
+
+# Kubernetes related
+/auth-kubernetes/
+/auth-kustomize/
+/k8s-secrets/
+
+# Documentation
+/docs/
+*.md
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+LICENSE
+SECURITY.md
+CODEOWNERS
+
+# Local development files
+.DS_Store
+bind-secrets.sh
+.releaserc
+
+# The Docker build itself will use the .env.docker file
+# so we can ignore other .env files
+.env
+example.env

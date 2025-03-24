@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: auth-network-policy
+  namespace: auth
+spec:
+  podSelector:
+    matchLabels:
+      app: auth
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector: {}
+    # Allow Google Cloud health check probes
+    - ipBlock:
+        cidr: 130.211.0.0/22
+    - ipBlock:
+        cidr: 35.191.0.0/16
+    ports:
+    - protocol: TCP
+      port: 9999

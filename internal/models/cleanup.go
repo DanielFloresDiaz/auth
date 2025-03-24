@@ -16,6 +16,10 @@ import (
 	"auth/internal/storage"
 )
 
+type Cleaner interface {
+	Clean(*storage.Connection) (int, error)
+}
+
 type Cleanup struct {
 	cleanupStatements []string
 

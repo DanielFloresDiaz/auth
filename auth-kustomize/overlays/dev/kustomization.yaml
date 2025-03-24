@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - ingress.yaml
+
+namespace: auth
+
+namePrefix: dev-
+
+patches:
+  - path: patch.yaml
+
+labels:
+- pairs:
+    environment: dev
+    tier: dev
+  includeSelectors: true
+
+configMapGenerator:
+  - name: auth-generated-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=dev
+      - LOG-LEVEL=debug

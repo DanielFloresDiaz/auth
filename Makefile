@@ -1,4 +1,4 @@
-.PHONY: all build deps dev-deps image migrate test vet sec format unused
+.PHONY: all build deps dev-deps image migrate test vet sec format unused static generate dev down docker-test docker-build docker-clean kapply-rec kustomize-dev kustomize-prod
 CHECK_FILES?=./...
 
 FLAGS=-ldflags "-X github.com/supabase/auth/internal/utilities.Version=`git describe --tags`" -buildvcs=false
@@ -6,7 +6,13 @@ ifdef RELEASE_VERSION
 	FLAGS=-ldflags "-X github.com/supabase/auth/internal/utilities.Version=v$(RELEASE_VERSION)" -buildvcs=false
 endif
 
-DEV_DOCKER_COMPOSE:=docker-compose.yml
+ifneq ($(shell docker compose version 2>/dev/null),)
+  DOCKER_COMPOSE=docker compose
+else
+  DOCKER_COMPOSE=docker-compose
+endif
+
+DEV_DOCKER_COMPOSE:=docker-compose-dev.yml
 
 help: ## Show this help.
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {sub("\\\\n",sprintf("\n%22c"," "), $$2);printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -35,7 +41,8 @@ migrate_test: ## Run database migrations for test.
 	hack/migrate.sh postgres
 
 test: build ## Run tests.
-	go test $(CHECK_FILES) -coverprofile=coverage.out -coverpkg ./... -p 1 -race -v -count=1 -timeout=20m
+	go test $(CHECK_FILES) -coverprofile=coverage.out -coverpkg ./... -p 1 -race -v -count=1
+	./hack/coverage.sh
 
 vet: # Vet the code
 	go vet $(CHECK_FILES)
@@ -61,26 +68,35 @@ generate: dev-deps
 	go generate ./...
 
 dev: ## Run the development containers
-	docker compose -f $(DEV_DOCKER_COMPOSE) up
+	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) up
 
 down: ## Shutdown the development containers
 	# Start postgres first and apply migrations
-	docker compose -f $(DEV_DOCKER_COMPOSE) down --volumes
+	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) down
 
 docker-test: ## Run the tests using the development containers
-	docker compose -f $(DEV_DOCKER_COMPOSE) up -d postgres
-	docker compose -f $(DEV_DOCKER_COMPOSE) run auth sh -c "make migrate_test"
-	docker compose -f $(DEV_DOCKER_COMPOSE) run auth sh -c "make test"
-	docker compose -f $(DEV_DOCKER_COMPOSE) down -v
+	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) up -d postgres
+	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) run auth sh -c "make migrate_test"
+	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) run auth sh -c "make test"
+	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) down -v
 
 docker-build: ## Force a full rebuild of the development containers
-	docker compose -f $(DEV_DOCKER_COMPOSE) build --no-cache
-	docker compose -f $(DEV_DOCKER_COMPOSE) up -d postgres
-	docker compose -f $(DEV_DOCKER_COMPOSE) run auth sh -c "make migrate_dev"
-	docker compose -f $(DEV_DOCKER_COMPOSE) down
+	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) build --no-cache
+	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) up -d postgres
+	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) run auth sh -c "make migrate_dev"
+	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) down
 
 docker-clean: ## Remove the development containers and volumes
-	docker compose -f $(DEV_DOCKER_COMPOSE) rm -fsv
+	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) rm -fsv
 
 format:
 	gofmt -s -w .
+
+kapply: ## Apply all YAML files in auth-kubernetes directory recursively.
+	kubectl apply -f auth-kubernetes --recursive
+
+kustomize-dev: ## Apply kustomization in auth-kustomize/overlays/dev
+	kubectl apply -k auth-kustomize/overlays/dev
+
+kustomize-prod: ## Apply kustomization in auth-kustomize/overlays/prod
+	kubectl apply -k auth-kustomize/overlays/prod

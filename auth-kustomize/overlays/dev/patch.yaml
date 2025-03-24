@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: auth
+  name: auth-deployment
+spec:
+  selector:
+    matchLabels:
+      environment: dev
+  template:
+    metadata:
+      labels:
+        environment: dev
+    spec:
+      containers:
+        - name: auth-container
+          image: ghcr.io/danielfloresdiaz/auth:dev
+          env:
+            - name: GOTRUE_LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-generated-config
+                  key: LOG-LEVEL
+            - name: DB_NAME
+              value: "postgres_auth_dev"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+        - name: cloudsql-proxy
+          resources:
+            requests:
+              cpu: "25m"
+              memory: "64Mi"
+            limits:
+              cpu: "50m"
+              memory: "128Mi"
