@@ -16,10 +16,12 @@ import (
 	"auth/internal/security"
 	"auth/internal/utilities"
 
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/sirupsen/logrus"
+
 	"github.com/didip/tollbooth/v5"
 	"github.com/didip/tollbooth/v5/limiter"
 	jwt "github.com/golang-jwt/jwt/v5"
-	"github.com/sirupsen/logrus"
 )
 
 type FunctionHooks map[string][]string
@@ -246,15 +248,18 @@ func (a *API) requireManualLinkingEnabled(w http.ResponseWriter, req *http.Reque
 }
 
 //lint:ignore U1000 This function is kept for API completeness and future use
-func (a *API) databaseCleanup(cleanup *models.Cleanup) func(http.Handler) http.Handler {
+func (a *API) databaseCleanup(cleanup models.Cleaner) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			next.ServeHTTP(w, r)
-
+			wrappedResp := chimiddleware.NewWrapResponseWriter(w, r.ProtoMajor)
+			next.ServeHTTP(wrappedResp, r)
 			switch r.Method {
 			case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+				if (wrappedResp.Status() / 100) != 2 {
+					// don't do any cleanups for non-2xx responses
+					return
+				}
 				// continue
-
 			default:
 				return
 			}

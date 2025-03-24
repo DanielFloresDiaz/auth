@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"auth/internal/conf"
+	"auth/internal/ratelimit"
+
 	"github.com/didip/tollbooth/v5"
 	"github.com/didip/tollbooth/v5/limiter"
 )
@@ -13,8 +15,8 @@ type Option interface {
 }
 
 type LimiterOptions struct {
-	Email *RateLimiter
-	Phone *RateLimiter
+	Email ratelimit.Limiter
+	Phone ratelimit.Limiter
 
 	Signups          *limiter.Limiter
 	AnonymousSignIns *limiter.Limiter
@@ -36,8 +38,9 @@ func (lo *LimiterOptions) apply(a *API) { a.limiterOpts = lo }
 func NewLimiterOptions(gc *conf.GlobalConfiguration) *LimiterOptions {
 	o := &LimiterOptions{}
 
-	o.Email = newRateLimiter(gc.RateLimitEmailSent)
-	o.Phone = newRateLimiter(gc.RateLimitSmsSent)
+	o.Email = ratelimit.New(gc.RateLimitEmailSent)
+	o.Phone = ratelimit.New(gc.RateLimitSmsSent)
+
 	o.AnonymousSignIns = tollbooth.NewLimiter(gc.RateLimitAnonymousUsers/(60*60),
 		&limiter.ExpirableOptions{
 			DefaultExpirationTTL: time.Hour,
