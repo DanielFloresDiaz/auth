@@ -19,8 +19,8 @@ spec:
             - name: GOTRUE_LOG_LEVEL
               valueFrom:
                 configMapKeyRef:
-                  name: auth-generated-config
-                  key: LOG-LEVEL
+                  name: auth-config
+                  key: GOTRUE_LOG_LEVEL
             - name: DB_NAME
               value: "postgres_auth_dev"
           resources:
