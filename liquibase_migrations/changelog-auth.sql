@@ -318,16 +318,15 @@ COMMENT ON INDEX "auth".users_email_partial_key IS 'auth: a partial unique index
 ALTER TABLE "auth".api_keys ENABLE ROW LEVEL SECURITY;
 CREATE POLICY api_keys_policy ON "auth".api_keys
 FOR ALL
-TO PUBLIC
 USING (
 	organization_id = current_setting('app.current_organization_id')::uuid
-	OR (
-		project_id = current_setting('app.current_project_id')::uuid
-	)
+	AND
+	current_setting('app.organization_role')::text IN ('admin', 'project_admin')
 )
 WITH CHECK (
 	organization_id = current_setting('app.current_organization_id')::uuid
-	OR project_id = current_setting('app.current_project_id')::uuid
+	AND
+	current_setting('app.organization_role')::text IN ('admin', 'project_admin')
 );
 --rollback DROP POLICY api_keys_policy ON "auth".api_keys;
 
