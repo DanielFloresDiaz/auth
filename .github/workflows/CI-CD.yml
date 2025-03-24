@@ -148,6 +148,18 @@ jobs:
           go install github.com/axw/gocov/gocov@latest
           go install github.com/AlekSi/gocov-xml@latest
           gocov convert coverage.out | gocov-xml > coverage.xml
+
+      - name: Upload coverage xml
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+
+      - name: Upload coverage html
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: coverage.html
       
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
@@ -372,18 +384,39 @@ jobs:
       - name: Verify deployment
         timeout-minutes: 5
         run: |
-          kubectl rollout status deployment/auth-api-deployment -n auth
-          kubectl rollout status deployment/auth-db-migration-deployment -n auth
+          ENV=${{ steps.deployment_env.outputs.environment }}
+          TAG=${{ steps.deployment_env.outputs.tag }}
+          
+          # Set the correct deployment name based on environment
+          if [[ "$ENV" == "dev" ]]; then
+            DEPLOYMENT_NAME="dev-auth-deployment"
+            INGRESS_NAME="dev-auth-ingress"
+          else
+            DEPLOYMENT_NAME="auth-deployment"
+            INGRESS_NAME="auth-ingress"
+          fi
+          
+          echo "Verifying deployment: $DEPLOYMENT_NAME in namespace auth"
+          kubectl rollout status deployment/$DEPLOYMENT_NAME -n auth
           
           # Verify the image version was updated
-          DEPLOYED_IMAGE=$(kubectl get deployment/auth-api-deployment -n auth -o jsonpath='{.spec.template.spec.containers[0].image}')
+          DEPLOYED_IMAGE=$(kubectl get deployment/$DEPLOYMENT_NAME -n auth -o jsonpath='{.spec.template.spec.containers[0].image}')
           echo "✅ Deployed image: $DEPLOYED_IMAGE"
           
-          if [[ "$DEPLOYED_IMAGE" == *"${{ steps.deployment_env.outputs.tag }}"* ]]; then
+          if [[ "$DEPLOYED_IMAGE" == *"$TAG"* ]]; then
             echo "✅ Correct image tag deployed!"
           else
             echo "❌ Incorrect image tag deployed!"
             exit 1
           fi
           
-          echo "✅ Deployment to ${{ steps.deployment_env.outputs.environment }} environment completed successfully!"
+          # Verify ingress exists
+          echo "Verifying ingress: $INGRESS_NAME in namespace auth"
+          if kubectl get ingress $INGRESS_NAME -n auth > /dev/null 2>&1; then
+            echo "✅ Ingress $INGRESS_NAME exists!"
+          else
+            echo "❌ Ingress $INGRESS_NAME does not exist!"
+            exit 1
+          fi
+          
+          echo "✅ Deployment to $ENV environment completed successfully!"
