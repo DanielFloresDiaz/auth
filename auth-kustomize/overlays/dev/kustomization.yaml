@@ -24,3 +24,4 @@ configMapGenerator:
     literals:
       - ENVIRONMENT=dev
       - GOTRUE_LOG_LEVEL=debug
+      - DB_NAME=postgres_auth_dev
