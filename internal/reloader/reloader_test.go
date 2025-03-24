@@ -10,9 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"auth/internal/conf"
+
 	"github.com/fsnotify/fsnotify"
 	"github.com/stretchr/testify/assert"
-	"github.com/supabase/auth/internal/conf"
 	"golang.org/x/sync/errgroup"
 )
 

@@ -3,8 +3,9 @@ package api
 import (
 	"testing"
 
+	"auth/internal/conf"
+
 	"github.com/stretchr/testify/assert"
-	"github.com/supabase/auth/internal/conf"
 )
 
 func TestNewLimiterOptions(t *testing.T) {

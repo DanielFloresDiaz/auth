@@ -3,7 +3,8 @@ package ratelimit
 import (
 	"time"
 
-	"github.com/supabase/auth/internal/conf"
+	"auth/internal/conf"
+
 	"golang.org/x/time/rate"
 )
 
