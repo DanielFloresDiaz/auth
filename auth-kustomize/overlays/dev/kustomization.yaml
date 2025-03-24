@@ -23,4 +23,4 @@ configMapGenerator:
     behavior: merge
     literals:
       - ENVIRONMENT=dev
-      - LOG-LEVEL=debug
+      - GOTRUE_LOG_LEVEL=debug
