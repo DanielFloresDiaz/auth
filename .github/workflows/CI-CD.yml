@@ -103,7 +103,7 @@ jobs:
         with:
           changelogFile: 'liquibase_migrations/changelog-test.sql'
           url: 'jdbc:postgresql://postgres:5432/postgres'
-          username: 'supabase_auth_admin'
+          username: 'auth_admin'
           password: 'root'
           rollbackOnError: 'true'
       - name: Run tests
