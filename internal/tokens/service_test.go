@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -51,7 +52,31 @@ func TestRefreshTokenV2(t *testing.T) {
 
 func (ts *RefreshTokenV2Suite) SetupTest() {
 	models.TruncateAll(ts.Conn)
-	u, err := models.NewUser("", "test@example.com", "password", "authenticated", nil, uuid.Nil, uuid.Nil)
+
+	project_id := uuid.Must(uuid.NewV4())
+	// Create a project
+	if err := ts.Conn.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Create the admin of the organization
+	user, err := models.NewUser("", "admin@example.com", "test", "authenticated", nil, uuid.Nil, project_id)
+	require.NoError(ts.T(), err)
+	require.NoError(ts.T(), ts.Conn.Create(user, "organization_id", "organization_role"))
+
+	// Create the organization
+	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
+	if err := ts.Conn.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Set the user as the admin of the organization
+	if err := ts.Conn.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Create test user
+	u, err := models.NewUser("", "test@example.com", "password", "authenticated", nil, organization_id, uuid.Nil)
 	require.NoError(ts.T(), err)
 	require.NoError(ts.T(), ts.Conn.Create(u))
 
@@ -819,7 +844,31 @@ func TestIDTokenGeneration(t *testing.T) {
 
 func (ts *IDTokenTestSuite) SetupTest() {
 	models.TruncateAll(ts.Conn)
-	u, err := models.NewUser("", "test@example.com", "password", "authenticated", nil, uuid.Nil, uuid.Nil)
+
+	project_id := uuid.Must(uuid.NewV4())
+	// Create a project
+	if err := ts.Conn.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Create the admin of the organization
+	user, err := models.NewUser("", "admin@example.com", "test", "authenticated", nil, uuid.Nil, project_id)
+	require.NoError(ts.T(), err)
+	require.NoError(ts.T(), ts.Conn.Create(user, "organization_id", "organization_role"))
+
+	// Create the organization
+	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
+	if err := ts.Conn.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Set the user as the admin of the organization
+	if err := ts.Conn.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Create test user
+	u, err := models.NewUser("", "test@example.com", "password", "authenticated", nil, organization_id, uuid.Nil)
 	require.NoError(ts.T(), err)
 
 	// Set user properties for testing scope-based claims

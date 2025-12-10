@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -25,9 +26,11 @@ const oauthServerTestConfig = "../../../hack/test.env"
 
 type OAuthClientTestSuite struct {
 	suite.Suite
-	Server *Server
-	Config *conf.GlobalConfiguration
-	DB     *storage.Connection
+	Server         *Server
+	Config         *conf.GlobalConfiguration
+	DB             *storage.Connection
+	ProjectID      uuid.UUID
+	OrganizationID uuid.UUID
 }
 
 func TestOAuthClientHandler(t *testing.T) {
@@ -58,9 +61,33 @@ func TestOAuthClientHandler(t *testing.T) {
 }
 
 func (ts *OAuthClientTestSuite) SetupTest() {
-	if ts.DB != nil {
-		models.TruncateAll(ts.DB)
+	models.TruncateAll(ts.DB)
+
+	project_id := uuid.Must(uuid.NewV4())
+	// Create a project
+	if err := ts.DB.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
+		panic(err)
 	}
+
+	// Create the admin of the organization
+	user, err := models.NewUser("", "admin@example.com", "test", "authenticated", nil, uuid.Nil, project_id)
+	require.NoError(ts.T(), err)
+	require.NoError(ts.T(), ts.DB.Create(user, "organization_id", "organization_role"))
+
+	// Create the organization
+	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
+	if err := ts.DB.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Set the user as the admin of the organization
+	if err := ts.DB.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
+	ts.ProjectID = project_id
+	ts.OrganizationID = organization_id
+
 	// Enable OAuth dynamic client registration for tests
 	ts.Config.OAuthServer.AllowDynamicRegistration = true
 }
@@ -441,7 +468,7 @@ func (ts *OAuthClientTestSuite) TestHandlerValidation() {
 
 // Helper function to create a test user
 func (ts *OAuthClientTestSuite) createTestUser(email string) *models.User {
-	user, err := models.NewUser("", email, "password123", "authenticated", nil, uuid.Nil, uuid.Nil)
+	user, err := models.NewUser("", email, "password123", "authenticated", nil, ts.OrganizationID, uuid.Nil)
 	require.NoError(ts.T(), err)
 	require.NotNil(ts.T(), user)
 
