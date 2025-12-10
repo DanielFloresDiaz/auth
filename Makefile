@@ -89,7 +89,7 @@ dev: ## Run the development containers
 
 down: ## Shutdown the development containers
 	# Start postgres first and apply migrations
-	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) down
+	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) down -v
 
 docker-test: ## Run the tests using the development containers
 	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) up -d postgres
