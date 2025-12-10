@@ -97,6 +97,46 @@ func (ts *ExternalTestSuite) createUser(providerId string, email string, name st
 	return u, err
 }
 
+func (ts *ExternalTestSuite) createUserWithIdentity(providerType, providerId string, email string, name string, avatar string, confirmationToken string, organization_id uuid.UUID, project_id uuid.UUID) (*models.User, error) {
+	// Cleanup existing user, if they already exist
+	if u, _ := models.FindUserByEmailAndAudience(ts.API.db, email, ts.Config.JWT.Aud, organization_id, project_id); u != nil {
+		require.NoError(ts.T(), ts.API.db.Destroy(u), "Error deleting user")
+	}
+
+	userData := map[string]interface{}{"provider_id": providerId, "full_name": name}
+	if avatar != "" {
+		userData["avatar_url"] = avatar
+	}
+	u, err := models.NewUser("", email, "test", ts.Config.JWT.Aud, userData, organization_id, project_id)
+
+	if confirmationToken != "" {
+		u.ConfirmationToken = confirmationToken
+	}
+	ts.Require().NoError(err, "Error making new user")
+	ts.Require().NoError(ts.API.db.Create(u), "Error creating user")
+
+	if confirmationToken != "" {
+		ts.Require().NoError(models.CreateOneTimeToken(ts.API.db, u.ID, email, u.ConfirmationToken, models.ConfirmationToken), "Error creating one-time confirmation/invite token")
+	}
+
+	if email != "" {
+		i, err := models.NewIdentity(u, "email", map[string]interface{}{
+			"sub":   u.ID.String(),
+			"email": email,
+		})
+		ts.Require().NoError(err)
+		ts.Require().NoError(ts.API.db.Create(i), "Error creating identity")
+	}
+
+	i, err := models.NewIdentity(u, providerType, map[string]interface{}{
+		"sub": providerId,
+	})
+	ts.Require().NoError(err)
+	ts.Require().NoError(ts.API.db.Create(i), "Error creating identity")
+
+	return u, err
+}
+
 func performAuthorizationRequest(ts *ExternalTestSuite, provider string, inviteToken string) *httptest.ResponseRecorder {
 	authorizeURL := "http://localhost/authorize?provider=" + provider
 	if inviteToken != "" {
@@ -202,7 +242,17 @@ func assertAuthorizationSuccess(ts *ExternalTestSuite, u *url.URL, tokenCount in
 
 	// ensure user has been created with metadata
 	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	user, err := models.FindUserByEmailAndAudience(ts.API.db, email, ts.Config.JWT.Aud, id, uuid.Nil)
+	var user *models.User
+	if email != "" {
+		user, err = models.FindUserByEmailAndAudience(ts.API.db, email, ts.Config.JWT.Aud, id, uuid.Nil)
+	} else {
+		identity := &models.Identity{}
+		err = ts.API.db.Q().Where("provider_id = ?", providerId).First(identity)
+		ts.Require().NoError(err)
+
+		user, err = models.FindUserByID(ts.API.db, identity.UserID)
+	}
+
 	ts.Require().NoError(err)
 	ts.Equal(providerId, user.UserMetaData["provider_id"])
 	ts.Equal(name, user.UserMetaData["full_name"])
