@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"auth/internal/conf"
-	"auth/internal/models"
+	"github.com/supabase/auth/internal/conf"
+	"github.com/supabase/auth/internal/models"
 
 	"github.com/gobwas/glob"
 	"github.com/gofrs/uuid"

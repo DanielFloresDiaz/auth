@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"auth/internal/conf"
+	"github.com/supabase/auth/internal/conf"
 
 	"github.com/stretchr/testify/require"
 )

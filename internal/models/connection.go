@@ -1,7 +1,7 @@
 package models
 
 import (
-	"auth/internal/storage"
+	"github.com/supabase/auth/internal/storage"
 
 	"github.com/gobuffalo/pop/v6"
 )

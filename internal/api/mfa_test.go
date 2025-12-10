@@ -12,11 +12,11 @@ import (
 
 	"github.com/gofrs/uuid"
 
-	"auth/internal/api/sms_provider"
-	"auth/internal/conf"
-	"auth/internal/crypto"
-	"auth/internal/models"
-	"auth/internal/utilities"
+	"github.com/supabase/auth/internal/api/sms_provider"
+	"github.com/supabase/auth/internal/conf"
+	"github.com/supabase/auth/internal/crypto"
+	"github.com/supabase/auth/internal/models"
+	"github.com/supabase/auth/internal/utilities"
 
 	"github.com/pquerna/otp"
 

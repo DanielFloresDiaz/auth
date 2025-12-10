@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"auth/internal/conf"
-	"auth/internal/crypto"
-	"auth/internal/models"
+	"github.com/supabase/auth/internal/conf"
+	"github.com/supabase/auth/internal/crypto"
+	"github.com/supabase/auth/internal/models"
 
 	"github.com/gofrs/uuid"
 	jwt "github.com/golang-jwt/jwt/v5"

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"auth/internal/conf"
+	"github.com/supabase/auth/internal/conf"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/stretchr/testify/assert"

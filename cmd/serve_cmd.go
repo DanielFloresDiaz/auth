@@ -8,11 +8,11 @@ import (
 	"syscall"
 	"time"
 
-	"auth/internal/api"
-	"auth/internal/conf"
-	"auth/internal/reloader"
-	"auth/internal/storage"
-	"auth/internal/utilities"
+	"github.com/supabase/auth/internal/api"
+	"github.com/supabase/auth/internal/conf"
+	"github.com/supabase/auth/internal/reloader"
+	"github.com/supabase/auth/internal/storage"
+	"github.com/supabase/auth/internal/utilities"
 
 	"golang.org/x/sys/unix"
 

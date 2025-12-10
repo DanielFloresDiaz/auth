@@ -12,13 +12,13 @@ import (
 	"testing"
 	"time"
 
-	mail "auth/internal/mailer"
+	mail "github.com/supabase/auth/internal/mailer"
 
 	"github.com/gofrs/uuid"
 
-	"auth/internal/conf"
-	"auth/internal/crypto"
-	"auth/internal/models"
+	"github.com/supabase/auth/internal/conf"
+	"github.com/supabase/auth/internal/crypto"
+	"github.com/supabase/auth/internal/models"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

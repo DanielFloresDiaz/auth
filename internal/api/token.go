@@ -9,11 +9,11 @@ import (
 
 	"fmt"
 
-	"auth/internal/hooks"
-	"auth/internal/metering"
-	"auth/internal/models"
-	"auth/internal/observability"
-	"auth/internal/storage"
+	"github.com/supabase/auth/internal/hooks"
+	"github.com/supabase/auth/internal/metering"
+	"github.com/supabase/auth/internal/models"
+	"github.com/supabase/auth/internal/observability"
+	"github.com/supabase/auth/internal/storage"
 
 	"github.com/gofrs/uuid"
 	"github.com/golang-jwt/jwt/v5"

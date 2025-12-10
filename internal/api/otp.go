@@ -6,10 +6,10 @@ import (
 	"io"
 	"net/http"
 
-	"auth/internal/api/sms_provider"
-	"auth/internal/conf"
-	"auth/internal/models"
-	"auth/internal/storage"
+	"github.com/supabase/auth/internal/api/sms_provider"
+	"github.com/supabase/auth/internal/conf"
+	"github.com/supabase/auth/internal/models"
+	"github.com/supabase/auth/internal/storage"
 
 	"github.com/gofrs/uuid"
 	"github.com/sethvargo/go-password/password"

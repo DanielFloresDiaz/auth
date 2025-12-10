@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"auth/internal/models"
-	"auth/internal/observability"
-	"auth/internal/security"
-	"auth/internal/utilities"
+	"github.com/supabase/auth/internal/models"
+	"github.com/supabase/auth/internal/observability"
+	"github.com/supabase/auth/internal/security"
+	"github.com/supabase/auth/internal/utilities"
 
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/sirupsen/logrus"

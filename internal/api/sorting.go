@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"auth/internal/models"
+	"github.com/supabase/auth/internal/models"
 )
 
 func sort(r *http.Request, allowedFields map[string]bool, defaultSort []models.SortField) (*models.SortParams, error) {

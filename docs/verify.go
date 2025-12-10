@@ -2,7 +2,7 @@
 package docs
 
 import (
-	"auth/internal/api"
+	"github.com/supabase/auth/internal/api"
 )
 
 // swagger:route GET /verify verify verify-get

@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"time"
 
-	"auth/internal/api/provider"
-	"auth/internal/api/sms_provider"
-	"auth/internal/metering"
-	"auth/internal/models"
-	"auth/internal/storage"
+	"github.com/supabase/auth/internal/api/provider"
+	"github.com/supabase/auth/internal/api/sms_provider"
+	"github.com/supabase/auth/internal/metering"
+	"github.com/supabase/auth/internal/models"
+	"github.com/supabase/auth/internal/storage"
 
 	"github.com/fatih/structs"
 	"github.com/gofrs/uuid"

@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
-	"auth/internal/models"
-	"auth/internal/storage"
+	"github.com/supabase/auth/internal/models"
+	"github.com/supabase/auth/internal/storage"
 
 	"github.com/gofrs/uuid"
 )

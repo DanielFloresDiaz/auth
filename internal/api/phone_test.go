@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"auth/internal/api/sms_provider"
-	"auth/internal/conf"
-	"auth/internal/models"
+	"github.com/supabase/auth/internal/api/sms_provider"
+	"github.com/supabase/auth/internal/conf"
+	"github.com/supabase/auth/internal/models"
 
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"

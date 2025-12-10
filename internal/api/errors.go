@@ -8,8 +8,8 @@ import (
 	"runtime/debug"
 	"time"
 
-	"auth/internal/observability"
-	"auth/internal/utilities"
+	"github.com/supabase/auth/internal/observability"
+	"github.com/supabase/auth/internal/utilities"
 
 	"github.com/pkg/errors"
 )

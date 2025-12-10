@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"auth/internal/conf"
+	"github.com/supabase/auth/internal/conf"
 
 	"github.com/stretchr/testify/assert"
 )

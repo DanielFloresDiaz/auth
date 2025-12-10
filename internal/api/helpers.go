@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"auth/internal/conf"
-	"auth/internal/models"
-	"auth/internal/security"
-	"auth/internal/utilities"
+	"github.com/supabase/auth/internal/conf"
+	"github.com/supabase/auth/internal/models"
+	"github.com/supabase/auth/internal/security"
+	"github.com/supabase/auth/internal/utilities"
 
 	"github.com/gofrs/uuid"
 	"github.com/pkg/errors"

@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"testing"
 
-	"auth/internal/conf"
-	"auth/internal/models"
+	"github.com/supabase/auth/internal/conf"
+	"github.com/supabase/auth/internal/models"
 
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/require"

@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	"auth/internal/conf"
-	"auth/internal/models"
+	"github.com/supabase/auth/internal/conf"
+	"github.com/supabase/auth/internal/models"
 )
 
 type MailRequest struct {

@@ -13,17 +13,17 @@ import (
 	"strings"
 	"time"
 
-	"auth/internal/observability"
+	"github.com/supabase/auth/internal/observability"
 
 	"github.com/gofrs/uuid"
 
-	"auth/internal/conf"
+	"github.com/supabase/auth/internal/conf"
 
-	"auth/internal/hooks"
+	"github.com/supabase/auth/internal/hooks"
 
 	"github.com/sirupsen/logrus"
 
-	"auth/internal/storage"
+	"github.com/supabase/auth/internal/storage"
 
 	standardwebhooks "github.com/standard-webhooks/standard-webhooks/libraries/go"
 )

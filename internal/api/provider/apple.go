@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"auth/internal/conf"
+	"github.com/supabase/auth/internal/conf"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/sirupsen/logrus"

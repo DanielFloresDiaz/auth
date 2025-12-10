@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"auth/internal/conf"
-	"auth/internal/storage"
+	"github.com/supabase/auth/internal/conf"
+	"github.com/supabase/auth/internal/storage"
 
 	"github.com/didip/tollbooth/v5"
 	"github.com/didip/tollbooth/v5/limiter"
