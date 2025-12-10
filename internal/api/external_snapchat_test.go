@@ -15,7 +15,10 @@ const (
 )
 
 func (ts *ExternalTestSuite) TestSignupExternalSnapchat() {
-	req := httptest.NewRequest(http.MethodGet, "http://localhost/authorize?provider=snapchat", nil)
+	organization_id := "123e4567-e89b-12d3-a456-426655440000"
+	provider := "snapchat"
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s", provider, organization_id)
+	req := httptest.NewRequest(http.MethodGet, url_path, nil)
 	w := httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)
 	ts.Require().Equal(http.StatusFound, w.Code)
@@ -92,7 +95,7 @@ func (ts *ExternalTestSuite) TestSignupExternalSnapchatDisableSignupErrorWhenNoU
 func (ts *ExternalTestSuite) TestSignupExternalSnapchatDisableSignupSuccessWithExistingUser() {
 	ts.Config.DisableSignup = true
 
-	ts.createUserWithIdentity("snapchat", "snapchatTestId", "", "Snapchat Test", "http://example.com/bitmoji", "", uuid.Nil, uuid.Nil)
+	ts.createUserWithIdentity("snapchat", "snapchatTestId", "", "Snapchat Test", "http://example.com/bitmoji", "", uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")), uuid.Nil)
 
 	tokenCount, userCount := 0, 0
 	code := "authcode"

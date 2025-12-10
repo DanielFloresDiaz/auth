@@ -15,177 +15,209 @@ import (
 
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 	"github.com/supabase/auth/internal/api"
+	"github.com/supabase/auth/internal/conf"
 	"github.com/supabase/auth/internal/e2e"
 	"github.com/supabase/auth/internal/models"
 )
 
-func TestInstance(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*4)
-	defer cancel()
-
-	t.Run("New", func(t *testing.T) {
-		t.Run("Success", func(t *testing.T) {
-			globalCfg := e2e.Must(e2e.Config())
-			inst, err := New(globalCfg)
-			require.NoError(t, err)
-			defer inst.Close()
-
-			email := "e2eapitest_" + uuid.Must(uuid.NewV4()).String() + "@localhost"
-			req := &api.SignupParams{
-				Email:    email,
-				Password: "password",
-			}
-			res := new(models.User)
-			err = Do(ctx, http.MethodPost, inst.APIServer.URL+"/signup", req, res)
-			require.NoError(t, err)
-			require.Equal(t, email, res.Email.String())
-		})
-
-		t.Run("DoAdmin", func(t *testing.T) {
-			globalCfg := e2e.Must(e2e.Config())
-			inst, err := New(globalCfg)
-			require.NoError(t, err)
-			defer inst.Close()
-
-			email := "e2eapitest_" + uuid.Must(uuid.NewV4()).String() + "@localhost"
-			req := &api.InviteParams{
-				Email: email,
-			}
-			res := new(models.User)
-
-			body := new(bytes.Buffer)
-			err = json.NewEncoder(body).Encode(req)
-			require.NoError(t, err)
-
-			httpReq, err := http.NewRequestWithContext(
-				ctx, "POST", "/invite", body)
-			require.NoError(t, err)
-
-			httpRes, err := inst.DoAdmin(httpReq)
-			require.NoError(t, err)
-
-			err = json.NewDecoder(httpRes.Body).Decode(res)
-			require.NoError(t, err)
-			require.Equal(t, email, res.Email.String())
-		})
-
-		t.Run("DoAdminFailure", func(t *testing.T) {
-			globalCfg := e2e.Must(e2e.Config())
-			inst, err := New(globalCfg)
-			require.NoError(t, err)
-			defer inst.Close()
-
-			httpReq, err := http.NewRequestWithContext(
-				ctx, "POST", "/invite", nil)
-			require.NoError(t, err)
-
-			httpRes, err := inst.doAdmin(httpReq, new(int))
-			require.Error(t, err)
-			require.Nil(t, httpRes)
-
-		})
-
-		t.Run("Failure", func(t *testing.T) {
-			globalCfg := e2e.Must(e2e.Config())
-			globalCfg.DB.Driver = ""
-			globalCfg.DB.URL = "invalid"
-
-			inst, err := New(globalCfg)
-			require.Error(t, err)
-			require.Nil(t, inst)
-		})
-
-		t.Run("InitURLFailure", func(t *testing.T) {
-			globalCfg := e2e.Must(e2e.Config())
-			inst, err := New(globalCfg)
-			require.NoError(t, err)
-			defer inst.Close()
-
-			inst.APIServer.URL = "\x01"
-			err = inst.initURL()
-			require.Error(t, err)
-		})
-	})
+type E2EAPITestSuite struct {
+	suite.Suite
+	Instance       *Instance
+	Config         *conf.GlobalConfiguration
+	OrganizationID uuid.UUID
+	ProjectID      uuid.UUID
 }
 
-func TestDo(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
+func TestE2EAPI(t *testing.T) {
 	globalCfg := e2e.Must(e2e.Config())
 	inst, err := New(globalCfg)
 	require.NoError(t, err)
+
+	ts := &E2EAPITestSuite{
+		Instance: inst,
+		Config:   globalCfg,
+	}
 	defer inst.Close()
 
+	suite.Run(t, ts)
+}
+
+func (ts *E2EAPITestSuite) SetupTest() {
+	models.TruncateAll(ts.Instance.Conn)
+
+	project_id := uuid.Must(uuid.NewV4())
+	ts.ProjectID = project_id
+	// Create a project
+	if err := ts.Instance.Conn.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Create the admin of the organization
+	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
+	require.NoError(ts.T(), err, "Error making new user")
+	require.NoError(ts.T(), ts.Instance.Conn.Create(user, "organization_id", "organization_role"), "Error creating user")
+
+	// Create the organization
+	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
+	ts.OrganizationID = organization_id
+	if err := ts.Instance.Conn.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+
+	// Set the user as the admin of the organization
+	if err := ts.Instance.Conn.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
+		panic(err)
+	}
+}
+
+func (ts *E2EAPITestSuite) TestInstance() {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*4)
+	defer cancel()
+
+	ts.Run("Success", func() {
+		email := "e2eapitest_" + uuid.Must(uuid.NewV4()).String() + "@localhost"
+		req := &api.SignupParams{
+			Email:          email,
+			Password:       "password",
+			OrganizationID: ts.OrganizationID,
+		}
+		res := new(models.User)
+		err := Do(ctx, http.MethodPost, ts.Instance.APIServer.URL+"/signup", req, res)
+		require.NoError(ts.T(), err)
+		require.Equal(ts.T(), email, res.Email.String())
+	})
+
+	ts.Run("DoAdmin", func() {
+		email := "e2eapitest_" + uuid.Must(uuid.NewV4()).String() + "@localhost"
+		req := &api.InviteParams{
+			Email:          email,
+			OrganizationID: ts.OrganizationID,
+		}
+		res := new(models.User)
+
+		body := new(bytes.Buffer)
+		err := json.NewEncoder(body).Encode(req)
+		require.NoError(ts.T(), err)
+
+		httpReq, err := http.NewRequestWithContext(
+			ctx, "POST", "/invite", body)
+		require.NoError(ts.T(), err)
+
+		httpRes, err := ts.Instance.DoAdmin(httpReq)
+		require.NoError(ts.T(), err)
+
+		err = json.NewDecoder(httpRes.Body).Decode(res)
+		require.NoError(ts.T(), err)
+		require.Equal(ts.T(), email, res.Email.String())
+	})
+
+	ts.Run("DoAdminFailure", func() {
+		httpReq, err := http.NewRequestWithContext(
+			ctx, "POST", "/invite", nil)
+		require.NoError(ts.T(), err)
+
+		httpRes, err := ts.Instance.doAdmin(httpReq, new(int))
+		require.Error(ts.T(), err)
+		require.Nil(ts.T(), httpRes)
+
+	})
+
+	ts.Run("Failure", func() {
+		globalCfg := e2e.Must(e2e.Config())
+		globalCfg.DB.Driver = ""
+		globalCfg.DB.URL = "invalid"
+
+		inst, err := New(globalCfg)
+		require.Error(ts.T(), err)
+		require.Nil(ts.T(), inst)
+	})
+
+	ts.Run("InitURLFailure", func() {
+		globalCfg := e2e.Must(e2e.Config())
+		inst, err := New(globalCfg)
+		require.NoError(ts.T(), err)
+		defer inst.Close()
+
+		inst.APIServer.URL = "\x01"
+		err = inst.initURL()
+		require.Error(ts.T(), err)
+	})
+}
+
+func (ts *E2EAPITestSuite) TestDo() {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
 	// Covers calls to Do with a `req` param type which can't marshaled
-	t.Run("InvalidRequestType", func(t *testing.T) {
+	ts.Run("InvalidRequestType", func() {
 		req := make(chan string)
 		err := Do(ctx, http.MethodPost, "http://localhost", &req, nil)
-		require.Error(t, err)
-		require.ErrorContains(t, err, "json: unsupported type: chan string")
+		require.Error(ts.T(), err)
+		require.ErrorContains(ts.T(), err, "json: unsupported type: chan string")
 	})
 
 	// Covers calls to Do with a `res` param type which can't marshaled
-	t.Run("InvalidResponseType", func(t *testing.T) {
+	ts.Run("InvalidResponseType", func() {
 		res := make(chan string)
-		err := Do(ctx, http.MethodGet, inst.APIServer.URL+"/settings", nil, &res)
-		require.Error(t, err)
-		require.ErrorContains(t, err, "json: cannot unmarshal object into Go value of type chan string")
+		err := Do(ctx, http.MethodGet, ts.Instance.APIServer.URL+"/settings", nil, &res)
+		require.Error(ts.T(), err)
+		require.ErrorContains(ts.T(), err, "json: cannot unmarshal object into Go value of type chan string")
 	})
 
 	// Covers status code >= 400 error handling switch statement
-	t.Run("api.HTTPErrorResponse_to_apierrors.HTTPError", func(t *testing.T) {
+	ts.Run("api.HTTPErrorResponse_to_apierrors.HTTPError", func() {
 		res := make(chan string)
-		err := Do(ctx, http.MethodGet, inst.APIServer.URL+"/user", nil, &res)
-		require.Error(t, err)
-		require.ErrorContains(t, err, "401: This endpoint requires a valid Bearer token")
+		err := Do(ctx, http.MethodGet, ts.Instance.APIServer.URL+"/user", nil, &res)
+		require.Error(ts.T(), err)
+		require.ErrorContains(ts.T(), err, "401: This endpoint requires a valid Bearer token")
 	})
 
 	// Covers http.NewRequestWithContext
-	t.Run("InvalidHTTPMethod", func(t *testing.T) {
+	ts.Run("InvalidHTTPMethod", func() {
 		err := Do(ctx, "\x01", "http://localhost", nil, nil)
-		require.Error(t, err)
-		require.ErrorContains(t, err, "net/http: invalid method")
+		require.Error(ts.T(), err)
+		require.ErrorContains(ts.T(), err, "net/http: invalid method")
 	})
 
 	// Covers status code >= 400 error handling switch statement json.Unmarshal
 	// by hitting the default error handler that returns html
-	t.Run("InvalidResponse", func(t *testing.T) {
-		err := Do(ctx, http.MethodGet, inst.APIServer.URL+"/404", nil, nil)
-		require.Error(t, err)
-		require.ErrorContains(t, err, "invalid character")
+	ts.Run("InvalidResponse", func() {
+		err := Do(ctx, http.MethodGet, ts.Instance.APIServer.URL+"/404", nil, nil)
+		require.Error(ts.T(), err)
+		require.ErrorContains(ts.T(), err, "invalid character")
 	})
 
 	// Covers defaultClient.Do failure
-	t.Run("InvalidURL", func(t *testing.T) {
+	ts.Run("InvalidURL", func() {
 		err := Do(ctx, http.MethodPost, "invalid", nil, nil)
-		require.Error(t, err)
-		require.ErrorContains(t, err, "unsupported protocol")
+		require.Error(ts.T(), err)
+		require.ErrorContains(ts.T(), err, "unsupported protocol")
 	})
 
 	// Covers http.StatusNoContent handling
-	t.Run("InvalidRequestType", func(t *testing.T) {
+	ts.Run("StatusNoContent", func() {
 		hr := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 		})
 
-		ts := httptest.NewServer(hr)
-		defer ts.Close()
+		srv := httptest.NewServer(hr)
+		defer srv.Close()
 
-		err := Do(ctx, http.MethodPost, ts.URL, nil, nil)
-		require.NoError(t, err)
+		err := Do(ctx, http.MethodPost, srv.URL, nil, nil)
+		require.NoError(ts.T(), err)
 	})
 
 	// Covers IO errors
-	t.Run("IOError", func(t *testing.T) {
+	ts.Run("IOError", func() {
 
 		for _, statusCode := range []int{http.StatusBadRequest, http.StatusOK} {
 
 			// Covers IO errors for the sc >= 400 and default status code
 			// handling in the switch statement within do.
 			testName := fmt.Sprintf("Status=%v", http.StatusText(statusCode))
-			t.Run(testName, func(t *testing.T) {
+			ts.Run(testName, func() {
 
 				// We assign a sentinel error to ensure propagation.
 				sentinel := errors.New("sentinel")
@@ -222,13 +254,13 @@ func TestDo(t *testing.T) {
 					w.WriteHeader(statusCode)
 				})
 
-				ts := httptest.NewServer(hr)
-				defer ts.Close()
+				srv := httptest.NewServer(hr)
+				defer srv.Close()
 
 				// We send the request and expect back our sentinel error.
-				err := Do(ctx, http.MethodPost, ts.URL, nil, nil)
-				require.Error(t, err)
-				require.Equal(t, sentinel, err)
+				err := Do(ctx, http.MethodPost, srv.URL, nil, nil)
+				require.Error(ts.T(), err)
+				require.Equal(ts.T(), sentinel, err)
 			})
 		}
 	})

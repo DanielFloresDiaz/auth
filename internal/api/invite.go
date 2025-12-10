@@ -47,10 +47,11 @@ func (a *API) Invite(w http.ResponseWriter, r *http.Request) error {
 
 	if isCreate {
 		signupParams := SignupParams{
-			Email:    params.Email,
-			Data:     params.Data,
-			Aud:      aud,
-			Provider: "email",
+			Email:          params.Email,
+			Data:           params.Data,
+			Aud:            aud,
+			Provider:       "email",
+			OrganizationID: params.OrganizationID,
 		}
 
 		// because params above sets no password, this method

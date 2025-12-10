@@ -21,9 +21,11 @@ import (
 
 type IdentityTestSuite struct {
 	suite.Suite
-	API    *API
-	Config *conf.GlobalConfiguration
-	Mailer mail.Mailer
+	API             *API
+	Config          *conf.GlobalConfiguration
+	Mailer          mail.Mailer
+	organization_id uuid.UUID
+	project_id      uuid.UUID
 }
 
 func TestIdentity(t *testing.T) {
@@ -43,6 +45,7 @@ func (ts *IdentityTestSuite) SetupTest() {
 	models.TruncateAll(ts.API.db)
 
 	project_id := uuid.Must(uuid.NewV4())
+	ts.project_id = project_id
 	// Create a project
 	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
 		panic(err)
@@ -55,6 +58,7 @@ func (ts *IdentityTestSuite) SetupTest() {
 
 	// Create the organization
 	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
+	ts.organization_id = organization_id
 	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
 		panic(err)
 	}
@@ -261,7 +265,7 @@ func (ts *IdentityTestSuite) generateAccessTokenAndSession(u *models.User) strin
 func (ts *IdentityTestSuite) TestLinkIdentitySendsNotificationEmailEnabled() {
 	ts.Config.Mailer.Notifications.IdentityLinkedEnabled = true
 
-	u, err := models.FindUserByEmailAndAudience(ts.API.db, "one@example.com", ts.Config.JWT.Aud, uuid.Nil, uuid.Nil)
+	u, err := models.FindUserByEmailAndAudience(ts.API.db, "one@example.com", ts.Config.JWT.Aud, ts.organization_id, uuid.Nil)
 	require.NoError(ts.T(), err)
 	ctx := withTargetUser(context.Background(), u)
 
@@ -290,7 +294,7 @@ func (ts *IdentityTestSuite) TestLinkIdentitySendsNotificationEmailEnabled() {
 func (ts *IdentityTestSuite) TestLinkIdentitySendsNotificationEmailDisabled() {
 	ts.Config.Mailer.Notifications.IdentityLinkedEnabled = false
 
-	u, err := models.FindUserByEmailAndAudience(ts.API.db, "one@example.com", ts.Config.JWT.Aud, uuid.Nil, uuid.Nil)
+	u, err := models.FindUserByEmailAndAudience(ts.API.db, "one@example.com", ts.Config.JWT.Aud, ts.organization_id, uuid.Nil)
 	require.NoError(ts.T(), err)
 	ctx := withTargetUser(context.Background(), u)
 
@@ -317,10 +321,10 @@ func (ts *IdentityTestSuite) TestUnlinkIdentitySendsNotificationEmailEnabled() {
 	ts.Config.Mailer.Notifications.IdentityUnlinkedEnabled = true
 	ts.Config.Security.ManualLinkingEnabled = true
 
-	u, err := models.FindUserByEmailAndAudience(ts.API.db, "two@example.com", ts.Config.JWT.Aud, uuid.Nil, uuid.Nil)
+	u, err := models.FindUserByEmailAndAudience(ts.API.db, "two@example.com", ts.Config.JWT.Aud, ts.organization_id, uuid.Nil)
 	require.NoError(ts.T(), err)
 
-	identity, err := models.FindIdentityByIdAndProvider(ts.API.db, u.ID.String(), "phone", uuid.Nil, uuid.Nil)
+	identity, err := models.FindIdentityByIdAndProvider(ts.API.db, u.ID.String(), "phone", ts.organization_id, uuid.Nil)
 	require.NoError(ts.T(), err)
 
 	// Get the mock mailer and reset it
@@ -347,10 +351,10 @@ func (ts *IdentityTestSuite) TestUnlinkIdentitySendsNotificationEmailDisabled() 
 	ts.Config.Mailer.Notifications.IdentityUnlinkedEnabled = false
 	ts.Config.Security.ManualLinkingEnabled = true
 
-	u, err := models.FindUserByEmailAndAudience(ts.API.db, "two@example.com", ts.Config.JWT.Aud, uuid.Nil, uuid.Nil)
+	u, err := models.FindUserByEmailAndAudience(ts.API.db, "two@example.com", ts.Config.JWT.Aud, ts.organization_id, uuid.Nil)
 	require.NoError(ts.T(), err)
 
-	identity, err := models.FindIdentityByIdAndProvider(ts.API.db, u.ID.String(), "phone", uuid.Nil, uuid.Nil)
+	identity, err := models.FindIdentityByIdAndProvider(ts.API.db, u.ID.String(), "phone", ts.organization_id, uuid.Nil)
 	require.NoError(ts.T(), err)
 
 	// Get the mock mailer and reset it

@@ -23,9 +23,11 @@ import (
 
 type UserTestSuite struct {
 	suite.Suite
-	API    *API
-	Config *conf.GlobalConfiguration
-	Mailer mailer.Mailer
+	API            *API
+	Config         *conf.GlobalConfiguration
+	Mailer         mailer.Mailer
+	OrganizationID uuid.UUID
+	ProjectID      uuid.UUID
 }
 
 func TestUser(t *testing.T) {
@@ -47,6 +49,7 @@ func (ts *UserTestSuite) SetupTest() {
 	models.TruncateAll(ts.API.db)
 
 	project_id := uuid.Must(uuid.NewV4())
+	ts.ProjectID = project_id
 	// Create a project
 	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
 		panic(err)
@@ -59,6 +62,7 @@ func (ts *UserTestSuite) SetupTest() {
 
 	// Create the organization
 	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
+	ts.OrganizationID = organization_id
 	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
 		panic(err)
 	}
@@ -121,7 +125,7 @@ func (ts *UserTestSuite) TestUserUpdateEmail() {
 			userData: map[string]interface{}{
 				"email":           "",
 				"phone":           "",
-				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"organization_id": ts.OrganizationID.String(),
 			},
 			isSecureEmailChangeEnabled: false,
 			isMailerAutoconfirmEnabled: false,
@@ -131,7 +135,7 @@ func (ts *UserTestSuite) TestUserUpdateEmail() {
 			desc: "User doesn't have an existing email and double email confirmation required",
 			userData: map[string]interface{}{
 				"email":           "",
-				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"organization_id": ts.OrganizationID.String(),
 				"phone":           "234567890",
 			},
 			isSecureEmailChangeEnabled: true,
@@ -142,7 +146,7 @@ func (ts *UserTestSuite) TestUserUpdateEmail() {
 			desc: "User has an existing email",
 			userData: map[string]interface{}{
 				"email":           "foo@example.com",
-				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"organization_id": ts.OrganizationID.String(),
 				"phone":           "",
 			},
 			isSecureEmailChangeEnabled: false,
@@ -153,7 +157,7 @@ func (ts *UserTestSuite) TestUserUpdateEmail() {
 			desc: "User has an existing email and double email confirmation required",
 			userData: map[string]interface{}{
 				"email":           "bar@example.com",
-				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"organization_id": ts.OrganizationID.String(),
 				"phone":           "",
 			},
 			isSecureEmailChangeEnabled: true,
@@ -164,7 +168,7 @@ func (ts *UserTestSuite) TestUserUpdateEmail() {
 			desc: "Update email with mailer autoconfirm enabled",
 			userData: map[string]interface{}{
 				"email":           "bar@example.com",
-				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"organization_id": ts.OrganizationID.String(),
 				"phone":           "",
 			},
 			isSecureEmailChangeEnabled: true,
@@ -175,7 +179,7 @@ func (ts *UserTestSuite) TestUserUpdateEmail() {
 			desc: "Update email with mailer autoconfirm enabled and anonymous user",
 			userData: map[string]interface{}{
 				"email":           "bar@example.com",
-				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"organization_id": ts.OrganizationID.String(),
 				"phone":           "",
 				"is_anonymous":    true,
 			},
@@ -281,7 +285,7 @@ func (ts *UserTestSuite) TestUserUpdatePhoneAutoconfirmEnabled() {
 			var buffer bytes.Buffer
 			require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
 				"phone":           c.userData["phone"],
-				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"organization_id": ts.OrganizationID.String(),
 			}))
 			req := httptest.NewRequest(http.MethodPut, "http://localhost/user", &buffer)
 			req.Header.Set("Content-Type", "application/json")
@@ -378,7 +382,7 @@ func (ts *UserTestSuite) TestUserUpdatePassword() {
 			require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]string{
 				"password":        c.newPassword,
 				"nonce":           c.nonce,
-				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"organization_id": ts.OrganizationID.String(),
 			}))
 
 			req := httptest.NewRequest(http.MethodPut, "http://localhost/user", &buffer)
@@ -445,7 +449,7 @@ func (ts *UserTestSuite) TestUserUpdatePasswordNoReauthenticationRequired() {
 			require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]string{
 				"password":        c.newPassword,
 				"nonce":           c.nonce,
-				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"organization_id": ts.OrganizationID.String(),
 			}))
 
 			req := httptest.NewRequest(http.MethodPut, "http://localhost/user", &buffer)
@@ -506,7 +510,7 @@ func (ts *UserTestSuite) TestUserUpdatePasswordReauthentication() {
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
 		"password":        "newpass",
 		"nonce":           "123456",
-		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+		"organization_id": ts.OrganizationID.String(),
 	}))
 
 	req = httptest.NewRequest(http.MethodPut, "http://localhost/user", &buffer)
@@ -546,7 +550,7 @@ func (ts *UserTestSuite) TestUserUpdatePasswordLogoutOtherSessions() {
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
 		"email":           u.GetEmail(),
 		"password":        "password",
-		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+		"organization_id": ts.OrganizationID.String(),
 	}))
 	req := httptest.NewRequest(http.MethodPost, "http://localhost/token?grant_type=password", &buffer)
 	req.Header.Set("Content-Type", "application/json")
@@ -562,7 +566,7 @@ func (ts *UserTestSuite) TestUserUpdatePasswordLogoutOtherSessions() {
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
 		"email":           u.GetEmail(),
 		"password":        "password",
-		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+		"organization_id": ts.OrganizationID.String(),
 	}))
 	req = httptest.NewRequest(http.MethodPost, "http://localhost/token?grant_type=password", &buffer)
 	req.Header.Set("Content-Type", "application/json")
@@ -576,7 +580,7 @@ func (ts *UserTestSuite) TestUserUpdatePasswordLogoutOtherSessions() {
 	// Update user's password using first session
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
 		"password":        "newpass",
-		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+		"organization_id": ts.OrganizationID.String(),
 	}))
 
 	req = httptest.NewRequest(http.MethodPut, "http://localhost/user", &buffer)
@@ -638,7 +642,7 @@ func (ts *UserTestSuite) TestUserUpdatePasswordSendsNotificationEmail() {
 			ts.Config.Mailer.Autoconfirm = false
 			ts.Config.Mailer.Notifications.PasswordChangedEnabled = c.notificationEnabled
 
-			u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, uuid.Nil, uuid.Nil)
+			u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, uuid.Nil)
 			require.NoError(ts.T(), err)
 
 			// Confirm the test user
@@ -656,7 +660,8 @@ func (ts *UserTestSuite) TestUserUpdatePasswordSendsNotificationEmail() {
 			// Update password
 			var buffer bytes.Buffer
 			require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
-				"password": c.password,
+				"password":        c.password,
+				"organization_id": ts.OrganizationID.String(),
 			}))
 
 			req := httptest.NewRequest(http.MethodPut, "http://localhost/user", &buffer)
@@ -668,7 +673,7 @@ func (ts *UserTestSuite) TestUserUpdatePasswordSendsNotificationEmail() {
 			require.Equal(ts.T(), http.StatusOK, w.Code)
 
 			// Verify password was updated
-			u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, uuid.Nil, uuid.Nil)
+			u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, uuid.Nil)
 			require.NoError(ts.T(), err)
 
 			// Assert that password change notification email was sent or not based on the instance's configuration

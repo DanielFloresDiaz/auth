@@ -25,7 +25,9 @@ type InviteTestSuite struct {
 	API    *API
 	Config *conf.GlobalConfiguration
 
-	token string
+	token          string
+	OrganizationID uuid.UUID
+	ProjectID      uuid.UUID
 }
 
 func TestInvite(t *testing.T) {
@@ -45,6 +47,7 @@ func (ts *InviteTestSuite) SetupTest() {
 	models.TruncateAll(ts.API.db)
 
 	project_id := uuid.Must(uuid.NewV4())
+	ts.ProjectID = project_id
 	// Create a project
 	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
 		panic(err)
@@ -57,6 +60,7 @@ func (ts *InviteTestSuite) SetupTest() {
 
 	// Create the organization
 	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
+	ts.OrganizationID = organization_id
 	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
 		panic(err)
 	}
@@ -72,12 +76,11 @@ func (ts *InviteTestSuite) SetupTest() {
 
 func (ts *InviteTestSuite) makeSuperAdmin(email string) string {
 	// Cleanup existing user, if they already exist
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	if u, _ := models.FindUserByEmailAndAudience(ts.API.db, email, ts.Config.JWT.Aud, id, uuid.Nil); u != nil {
+	if u, _ := models.FindUserByEmailAndAudience(ts.API.db, email, ts.Config.JWT.Aud, ts.OrganizationID, uuid.Nil); u != nil {
 		require.NoError(ts.T(), ts.API.db.Destroy(u), "Error deleting user")
 	}
 
-	u, err := models.NewUser("123456789", email, "test", ts.Config.JWT.Aud, map[string]interface{}{"full_name": "Test User"}, id, uuid.Nil)
+	u, err := models.NewUser("123456789", email, "test", ts.Config.JWT.Aud, map[string]interface{}{"full_name": "Test User"}, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err, "Error making new user")
 	require.NoError(ts.T(), ts.API.db.Create(u, "project_id", "organization_role"))
 
@@ -111,7 +114,7 @@ func (ts *InviteTestSuite) TestInvite() {
 		"data": map[string]interface{}{
 			"a": 1,
 		},
-		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+		"organization_id": ts.OrganizationID.String(),
 	}))
 
 	// Setup request
@@ -140,6 +143,7 @@ func (ts *InviteTestSuite) TestInviteExists() {
 			"data": map[string]interface{}{
 				"a": 1,
 			},
+			"organization_id": ts.OrganizationID.String(),
 		}))
 
 		// Setup request
@@ -162,6 +166,7 @@ func (ts *InviteTestSuite) TestInviteExists() {
 			"data": map[string]interface{}{
 				"a": 1,
 			},
+			"organization_id": ts.OrganizationID.String(),
 		}))
 
 		// Setup request
@@ -187,7 +192,7 @@ func (ts *InviteTestSuite) TestInviteAfterSignupShouldNotReturnSensitiveFields()
 		"data": map[string]interface{}{
 			"a": 1,
 		},
-		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+		"organization_id": ts.OrganizationID.String(),
 	}))
 
 	// Setup request
@@ -207,7 +212,7 @@ func (ts *InviteTestSuite) TestInviteAfterSignupShouldNotReturnSensitiveFields()
 		"data": map[string]interface{}{
 			"a": 1,
 		},
-		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+		"organization_id": ts.OrganizationID.String(),
 	}))
 
 	// Setup request
@@ -236,7 +241,7 @@ func (ts *InviteTestSuite) TestInvite_WithoutAccess() {
 		"data": map[string]interface{}{
 			"a": 1,
 		},
-		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+		"organization_id": ts.OrganizationID.String(),
 	}))
 
 	// Setup request
@@ -265,7 +270,7 @@ func (ts *InviteTestSuite) TestVerifyInvite() {
 				"type":            "invite",
 				"token":           "asdf",
 				"password":        "testing",
-				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"organization_id": ts.OrganizationID.String(),
 			},
 			http.StatusOK,
 		},
@@ -276,7 +281,7 @@ func (ts *InviteTestSuite) TestVerifyInvite() {
 				"email":           "test1@example.com",
 				"type":            "invite",
 				"token":           "asdf",
-				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"organization_id": ts.OrganizationID.String(),
 			},
 			http.StatusOK,
 		},
