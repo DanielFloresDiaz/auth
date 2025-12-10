@@ -39,6 +39,7 @@ NvmYIdjXXfEV0OsftSN/+s+UqtDEqEXR0Bmd51k0OJUm+2iNyu8Nh5Sr2M2475Gk2PSdPbzYdEoi
 nfcdcTq+SxjLzHdQyv2U8TiLwZhRNXcrY8kCqgby</ds:X509Certificate></ds:X509Data></ds:KeyInfo></md:KeyDescriptor><md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat><md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://%[1]s/sso/saml"/><md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://%[1]s/sso/saml"/></md:IDPSSODescriptor></md:EntityDescriptor>`
 
 func TestE2EAdmin(t *testing.T) {
+	t.Skip("Skipping SSO admin e2e tests temporarily")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 

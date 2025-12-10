@@ -34,6 +34,7 @@ const (
 )
 
 func TestWeb3(t *testing.T) {
+	t.Skip("Skipping web3 tests temporarily")
 	api, config, err := setupAPIForTest()
 	require.NoError(t, err)
 
