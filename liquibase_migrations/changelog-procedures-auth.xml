@@ -165,8 +165,8 @@
         CREATE OR REPLACE FUNCTION set_admin_organization_role()
         RETURNS TRIGGER AS $$
         BEGIN
-            -- Set the user as an admin if the OLD.project_id is not null and the NEW.organization_id is not null
-            IF OLD.project_id IS NOT NULL AND NEW.organization_id IS NOT NULL THEN
+            -- Set the user as an admin if the OLD.project_id is not null and the organization_id changed from null to not null
+            IF OLD.project_id IS NOT NULL AND OLD.organization_id != NEW.organization_id AND NEW.organization_id IS NOT NULL THEN
                 NEW.organization_role = 'admin';
             END IF;
             RETURN NEW;
