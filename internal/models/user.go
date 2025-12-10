@@ -110,8 +110,9 @@ func NewUserWithPasswordHash(phone, email, passwordHash string, aud string, user
 		Phone:             storage.NullString(phone),
 		UserMetaData:      userData,
 		EncryptedPassword: &passwordHash,
-		OrganizationID:    uuid.NullUUID{UUID: organization_id, Valid: true},
-		ProjectID:         uuid.NullUUID{UUID: project_id, Valid: true},
+		OrganizationID:    uuid.NullUUID{UUID: organization_id, Valid: organization_id != uuid.Nil},
+		ProjectID:         uuid.NullUUID{UUID: project_id, Valid: project_id != uuid.Nil},
+		OrganizationRole:  "client",
 	}
 	return user, nil
 }
@@ -145,8 +146,9 @@ func NewUser(phone, email, password string, aud string, userData map[string]inte
 		Phone:             storage.NullString(phone),
 		UserMetaData:      userData,
 		EncryptedPassword: &passwordHash,
-		OrganizationID:    uuid.NullUUID{UUID: organization_id, Valid: true},
-		ProjectID:         uuid.NullUUID{UUID: project_id, Valid: true},
+		OrganizationID:    uuid.NullUUID{UUID: organization_id, Valid: organization_id != uuid.Nil},
+		ProjectID:         uuid.NullUUID{UUID: project_id, Valid: project_id != uuid.Nil},
+		OrganizationRole:  "client",
 	}
 	return user, nil
 }
