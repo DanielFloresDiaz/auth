@@ -90,9 +90,9 @@ func (a *API) Resend(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if params.Email != "" {
-		user, err = models.FindUserByEmailAndAudience(db, params.Email, aud, params.OrganizationID, uuid.Nil)
+		user, err = models.FindUserByEmailAndAudience(db, params.Email, aud, params.OrganizationID, params.ProjectID)
 	} else if params.Phone != "" {
-		user, err = models.FindUserByPhoneAndAudience(db, params.Phone, aud, params.OrganizationID, uuid.Nil)
+		user, err = models.FindUserByPhoneAndAudience(db, params.Phone, aud, params.OrganizationID, params.ProjectID)
 	}
 
 	if err != nil {
