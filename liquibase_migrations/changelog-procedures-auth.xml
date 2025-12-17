@@ -162,38 +162,24 @@
         END;
         $$ LANGUAGE plpgsql;
 
-        CREATE OR REPLACE FUNCTION set_admin_organization_role()
-        RETURNS TRIGGER AS $$
-        BEGIN
-            -- Set the user as an admin if the OLD.project_id is not null and the organization_id changed from null to not null
-            IF OLD.project_id IS NOT NULL AND OLD.organization_id != NEW.organization_id AND NEW.organization_id IS NOT NULL THEN
-                NEW.organization_role = 'admin';
-            END IF;
-            RETURN NEW;
-        END;
-        $$ LANGUAGE plpgsql;
-
         CREATE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION prevent_change_organization_project();
         CREATE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."flow_state" FOR EACH ROW EXECUTE FUNCTION prevent_change_organization_project();
         CREATE TRIGGER prevent_set_project_id BEFORE UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION prevent_set_project_id();
         CREATE TRIGGER update_organization_role BEFORE UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION update_organization_role();
         CREATE TRIGGER prevent_organization_project_null BEFORE INSERT OR UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION prevent_organization_project_null();
         CREATE TRIGGER prevent_organization_project_null BEFORE INSERT OR UPDATE ON "auth"."flow_state" FOR EACH ROW EXECUTE FUNCTION prevent_organization_project_null();
-        CREATE TRIGGER set_admin_organization_role BEFORE INSERT OR UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION set_admin_organization_role();
     </createProcedure>
     <rollback>
         DROP FUNCTION prevent_change_organization_project();
         DROP FUNCTION prevent_set_project_id();
         DROP FUNCTION update_organization_role();
         DROP FUNCTION prevent_organization_project_null();
-        DROP FUNCTION set_admin_organization_role();
         DROP TRIGGER prevent_change_organization_project ON "auth"."users";
         DROP TRIGGER prevent_change_organization_project ON "auth"."flow_state";
         DROP TRIGGER prevent_set_project_id ON "auth"."users";
         DROP TRIGGER update_organization_role ON "auth"."users";
         DROP TRIGGER prevent_organization_project_null ON "auth"."users";
         DROP TRIGGER prevent_organization_project_null ON "auth"."flow_state";
-        DROP TRIGGER set_admin_organization_role ON "auth"."users";
     </rollback>
 </changeSet>
 
