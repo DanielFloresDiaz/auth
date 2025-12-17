@@ -18,6 +18,9 @@ migrate_db() {
   echo "Migrating database: $db_name"
   liquibase update --changelog-file=$MIGRATIONS_PATH/changelog-public.sql --url=jdbc:postgresql://$POSTGRES_HOST:$POSTGRES_PORT/$db_name --username=$POSTGRES_USER --password=$POSTGRES_PASSWORD
   liquibase update --changelog-file=$MIGRATIONS_PATH/changelog-auth.sql --url=jdbc:postgresql://$POSTGRES_HOST:$POSTGRES_PORT/$db_name --username=$POSTGRES_USER --password=$POSTGRES_PASSWORD
+  liquibase update --changelog-file=$MIGRATIONS_PATH/changelog-rls-auth.sql --url=jdbc:postgresql://$POSTGRES_HOST:$POSTGRES_PORT/$db_name --username=$POSTGRES_USER --password=$POSTGRES_PASSWORD
+  liquibase update --changelog-file=$MIGRATIONS_PATH/changelog-index-auth.sql --url=jdbc:postgresql://$POSTGRES_HOST:$POSTGRES_PORT/$db_name --username=$POSTGRES_USER --password=$POSTGRES_PASSWORD
+  liquibase update --changelog-file=$MIGRATIONS_PATH/changelog-grants-auth.sql --url=jdbc:postgresql://$POSTGRES_HOST:$POSTGRES_PORT/$db_name --username=$POSTGRES_USER --password=$POSTGRES_PASSWORD
   liquibase update --changelog-file=$MIGRATIONS_PATH/changelog-procedures-auth.xml --url=jdbc:postgresql://$POSTGRES_HOST:$POSTGRES_PORT/$db_name --username=$POSTGRES_USER --password=$POSTGRES_PASSWORD
 }
 
