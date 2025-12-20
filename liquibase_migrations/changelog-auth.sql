@@ -4,6 +4,7 @@
 --changeset solomon.auth:1 labels:auth context:auth
 --comment: create api_key_permissions enum
 CREATE TYPE "auth"."tier_organizations" AS ENUM (
+  'free',
   'low',
   'medium',
   'high'
@@ -48,7 +49,7 @@ CREATE TABLE IF NOT EXISTS "auth".organizations (
 	admin_id uuid UNIQUE NOT NULL,
 	name varchar(255) NULL,
 	description text NULL,
-	tier "auth".tier_organizations DEFAULT 'low',
+	tier "auth".tier_organizations DEFAULT 'free',
 	created_at timestamptz DEFAULT current_timestamp,
 	updated_at timestamptz DEFAULT current_timestamp,
 	CONSTRAINT organizations_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE,

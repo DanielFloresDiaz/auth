@@ -275,7 +275,6 @@
         DROP TRIGGER trigger_set_uuid ON "auth"."api_keys";
         DROP TRIGGER trigger_set_uuid ON "auth"."projects";
         DROP TRIGGER trigger_set_uuid ON "auth"."organizations";
-
     </rollback>
 </changeSet>
 <changeSet author="admin" id="solomon.public.functions:6">
@@ -320,6 +319,27 @@
         DROP TRIGGER prevent_set_project_id ON "auth"."identities";
         DROP TRIGGER prevent_organization_project_null ON "auth"."identities";
         DROP TRIGGER trigger_assign_project_id_before_insert ON auth.identities;
+    </rollback>
+</changeSet>
+<changeSet author="admin" id="solomon.auth.functions:3">
+    <createProcedure
+           dbms="postgresql">
+        CREATE OR REPLACE FUNCTION enforce_free_tier()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.tier := 'free';
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        CREATE TRIGGER trigger_enforce_free_tier
+        BEFORE INSERT ON "auth".organizations
+        FOR EACH ROW
+        EXECUTE FUNCTION enforce_free_tier();
+    </createProcedure>
+    <rollback>
+        DROP TRIGGER trigger_enforce_free_tier ON "auth".organizations;
+        DROP FUNCTION enforce_free_tier();
     </rollback>
 </changeSet>
 </databaseChangeLog>
