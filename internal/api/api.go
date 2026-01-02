@@ -407,12 +407,26 @@ func NewAPIWithVersion(globalConfig *conf.GlobalConfiguration, db *storage.Conne
 		}
 	})
 
-	corsHandler := cors.New(cors.Options{
+	corsOptions := cors.Options{
 		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete},
-		AllowedHeaders:   globalConfig.CORS.AllAllowedHeaders([]string{"Accept", "Authorization", "Content-Type", "X-Client-IP", "X-Client-Info", audHeaderName, useCookieHeader, APIVersionHeaderName}),
+		AllowedHeaders:   globalConfig.CORS.AllAllowedHeaders([]string{"Accept", "Authorization", "Content-Type", "X-Client-IP", "X-Client-Info", audHeaderName, useCookieHeader, APIVersionHeaderName, "apikey"}),
 		ExposedHeaders:   []string{"X-Total-Count", "Link", APIVersionHeaderName},
 		AllowCredentials: true,
-	})
+		Debug:            true,
+	}
+
+	// Configure allowed origins
+	if len(globalConfig.CORS.AllowedOrigins) > 0 {
+		corsOptions.AllowedOrigins = globalConfig.CORS.AllowedOrigins
+	} else {
+		// When AllowCredentials is true, we must use a function to dynamically allow all origins
+		// because the CORS spec doesn't allow Access-Control-Allow-Origin: * with credentials
+		corsOptions.AllowOriginFunc = func(origin string) bool {
+			return true // Allow all origins
+		}
+	}
+
+	corsHandler := cors.New(corsOptions)
 
 	api.handler = corsHandler.Handler(r)
 	return api
