@@ -183,6 +183,33 @@
     </rollback>
 </changeSet>
 
+<changeSet author="admin" id="solomon.auth.functions:4">
+    <createProcedure
+           dbms="postgresql"
+           >
+
+        CREATE OR REPLACE FUNCTION create_project_default_tier()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            INSERT INTO "auth".tier_organizations_tiers (project_id, tier, tier_model, tier_time, tier_usage)
+            VALUES (NEW.id, 'free', 'free', 'free', 'free')
+            ON CONFLICT (project_id, tier) DO NOTHING;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        CREATE TRIGGER trigger_create_default_tier
+        AFTER INSERT ON "auth".projects
+        FOR EACH ROW
+        EXECUTE FUNCTION create_project_default_tier();
+
+    </createProcedure>
+    <rollback>
+        DROP TRIGGER trigger_create_default_tier ON "auth".projects;
+        DROP FUNCTION create_project_default_tier();
+    </rollback>
+</changeSet>
+
 <changeSet author="admin" id="solomon.auth.functions:2">
     <createProcedure
            dbms="postgresql"
