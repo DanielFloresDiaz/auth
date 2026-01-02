@@ -75,9 +75,17 @@ func serve(ctx context.Context) {
 	logrus.WithField("version", initialAPI.Version()).Infof("GoTrue API started on: %s", addr)
 
 	ah := reloader.NewAtomicHandler(initialAPI)
+
+	// Wrap handler with /auth/v1 prefix
+	prefixedHandler := http.StripPrefix("/auth/v1", ah)
+	mux := http.NewServeMux()
+	mux.Handle("/auth/v1/", prefixedHandler)
+	// Also serve root endpoints (health, well-known, callback) without prefix
+	mux.Handle("/", ah)
+
 	httpSrv := &http.Server{
 		Addr:              addr,
-		Handler:           ah,
+		Handler:           mux,
 		ReadHeaderTimeout: 2 * time.Second, // to mitigate a Slowloris attack
 		BaseContext: func(net.Listener) context.Context {
 			return baseCtx
