@@ -13,3 +13,9 @@ CREATE TYPE "public"."tier_usages" AS ENUM ('low', 'medium', 'high');
 --comment: tier_models definition
 CREATE TYPE "public"."tier_models" AS ENUM ('low', 'medium', 'high');
 --rollback DROP TYPE "public"."tier_models";
+
+--changeset solomon.public:4 labels:public context:public
+--comment: add 'free' to tier enums
+ALTER TYPE "public"."tier_times" ADD VALUE IF NOT EXISTS 'free';
+ALTER TYPE "public"."tier_usages" ADD VALUE IF NOT EXISTS 'free';
+ALTER TYPE "public"."tier_models" ADD VALUE IF NOT EXISTS 'free';
