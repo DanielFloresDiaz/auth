@@ -45,9 +45,9 @@ func findOrganization(tx *storage.Connection, query string, args ...interface{})
 
 func FindTiersByOrganizationIDAndOrganizationRole(tx *storage.Connection, organization_id uuid.UUID, organization_role string) (string, string, string, error) {
 
-	var tier_model string
-	var tier_time string
-	var tier_usage string
+	var tier_model string = "free"
+	var tier_time string = "free"
+	var tier_usage string = "free"
 	var query string
 	var args []interface{}
 
