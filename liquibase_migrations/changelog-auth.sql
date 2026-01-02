@@ -1,16 +1,6 @@
 --liquibase formatted sql
 
 --------------------------- enums ---------------------------
---changeset solomon.auth:1 labels:auth context:auth
---comment: create api_key_permissions enum
-CREATE TYPE "auth"."tier_organizations" AS ENUM (
-  'free',
-  'low',
-  'medium',
-  'high'
-);
---rollback DROP TYPE "auth"."api_key_permissions";
-
 --changeset solomon.auth:2 labels:auth context:auth
 --comment: create organization_roles enum
 CREATE TYPE "auth"."organization_roles" AS ENUM (
@@ -49,7 +39,7 @@ CREATE TABLE IF NOT EXISTS "auth".organizations (
 	admin_id uuid UNIQUE NOT NULL,
 	name varchar(255) NULL,
 	description text NULL,
-	tier "auth".tier_organizations DEFAULT 'free',
+	tier text DEFAULT 'free',
 	created_at timestamptz DEFAULT current_timestamp,
 	updated_at timestamptz DEFAULT current_timestamp,
 	CONSTRAINT organizations_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE,
@@ -143,14 +133,16 @@ CREATE TABLE IF NOT EXISTS "auth".api_keys (
 --comment: create table tier_organizations_tiers
 CREATE TABLE IF NOT EXISTS "auth".tier_organizations_tiers (
 	id serial UNIQUE NOT NULL,
-	tier "auth".tier_organizations NOT NULL,
+	project_id uuid NOT NULL,
+	tier text NOT NULL,
 	tier_model "public".tier_models NOT NULL,
 	tier_time "public".tier_times NOT NULL,
 	tier_usage "public".tier_usages NOT NULL,
 	created_at timestamptz DEFAULT current_timestamp,
 	updated_at timestamptz DEFAULT current_timestamp,
 	CONSTRAINT tier_organizations_tiers_pkey PRIMARY KEY (id),
-	CONSTRAINT tier_organizations_tiers_tier_unique UNIQUE (tier)
+	CONSTRAINT tier_organizations_tiers_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE,
+	CONSTRAINT tier_organizations_tiers_project_id_tier_unique UNIQUE (project_id, tier)
 );
 --rollback DROP TABLE "auth".tier_organizations_tiers;
 
