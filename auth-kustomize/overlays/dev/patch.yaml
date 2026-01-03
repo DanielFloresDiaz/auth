@@ -20,9 +20,12 @@ spec:
               valueFrom:
                 configMapKeyRef:
                   name: auth-generated-config
-                  key: LOG-LEVEL
+                  key: GOTRUE_LOG_LEVEL
             - name: DB_NAME
-              value: "postgres_auth_dev"
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-generated-config
+                  key: DB_NAME
           resources:
             requests:
               cpu: "50m"

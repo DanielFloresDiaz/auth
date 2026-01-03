@@ -233,4 +233,3 @@ CREATE UNIQUE INDEX IF NOT EXISTS users_phone_project_id_org_null_unique
 ON "auth".users (phone, project_id)
 WHERE organization_id IS NULL;
 --rollback DROP INDEX IF EXISTS "auth".users_email_project_id_org_null_unique;
---rollback DROP INDEX IF EXISTS "auth".users_phone_project_id_org_null_unique;

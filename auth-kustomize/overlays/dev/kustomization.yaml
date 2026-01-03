@@ -23,4 +23,5 @@ configMapGenerator:
     behavior: merge
     literals:
       - ENVIRONMENT=dev
-      - LOG-LEVEL=debug
+      - GOTRUE_LOG_LEVEL=debug
+      - DB_NAME=postgres_auth_dev
