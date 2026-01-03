@@ -1,12 +1,12 @@
 package cmd
 
 import (
-	"auth/internal/conf"
-	"auth/internal/models"
-	"auth/internal/storage"
 	"github.com/gofrs/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/supabase/auth/internal/conf"
+	"github.com/supabase/auth/internal/models"
+	"github.com/supabase/auth/internal/storage"
 )
 
 var autoconfirm, isAdmin bool
@@ -68,7 +68,7 @@ func adminCreateUser(config *conf.GlobalConfiguration, args []string) {
 	aud := getAudience(config)
 	id := uuid.Must(uuid.FromString(args[2]))
 
-	if user, err := models.IsDuplicatedEmail(db, args[0], aud, nil, id, uuid.Nil); user != nil {
+	if user, err := models.IsDuplicatedEmail(db, args[0], aud, nil, config.Experimental.ProvidersWithOwnLinkingDomain, id, uuid.Nil); user != nil {
 		logrus.Fatalf("Error creating new user: user already exists")
 	} else if err != nil {
 		logrus.Fatalf("Error checking user email: %+v", err)

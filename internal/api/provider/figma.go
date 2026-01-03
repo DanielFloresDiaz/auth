@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"auth/internal/conf"
+	"github.com/supabase/auth/internal/conf"
 	"golang.org/x/oauth2"
 )
 
@@ -38,7 +38,7 @@ func NewFigmaProvider(ext conf.OAuthProviderConfiguration, scopes string) (OAuth
 	apiHost := chooseHost(ext.URL, defaultFigmaAPIBase)
 
 	oauthScopes := []string{
-		"files:read",
+		"current_user:read",
 	}
 
 	if scopes != "" {

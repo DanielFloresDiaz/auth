@@ -7,7 +7,7 @@ import (
 	"encoding/hex"
 	"strings"
 
-	"auth/internal/conf"
+	"github.com/supabase/auth/internal/conf"
 	"golang.org/x/oauth2"
 )
 

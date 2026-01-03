@@ -3,27 +3,22 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
+	"slices"
 
-	"auth/internal/conf"
-	"auth/internal/models"
-	"auth/internal/security"
-	"auth/internal/utilities"
+	"github.com/supabase/auth/internal/api/apierrors"
+	"github.com/supabase/auth/internal/api/shared"
+	"github.com/supabase/auth/internal/conf"
+	"github.com/supabase/auth/internal/models"
+	"github.com/supabase/auth/internal/security"
+
+	"github.com/supabase/auth/internal/utilities"
 
 	"github.com/gofrs/uuid"
-	"github.com/pkg/errors"
 )
 
 func sendJSON(w http.ResponseWriter, status int, obj interface{}) error {
-	w.Header().Set("Content-Type", "application/json")
-	b, err := json.Marshal(obj)
-	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("Error encoding json response: %v", obj))
-	}
-	w.WriteHeader(status)
-	_, err = w.Write(b)
-	return err
+	return shared.SendJSON(w, status, obj)
 }
 
 func isAdmin(u *models.User, config *conf.GlobalConfiguration) bool {
@@ -40,7 +35,9 @@ func (a *API) requestAud(ctx context.Context, r *http.Request) string {
 	// Then check the token
 	claims := getClaims(ctx)
 
-	if claims != nil {
+	// ignore the JWT's aud claim if the role is admin
+	// this is because anon, service_role never had an aud claim to begin with
+	if claims != nil && !slices.Contains(config.JWT.AdminRoles, claims.Role) {
 		aud, _ := claims.GetAudience()
 		if len(aud) != 0 && aud[0] != "" {
 			return aud[0]
@@ -93,6 +90,7 @@ type RequestParams interface {
 		SignupParams |
 		SingleSignOnParams |
 		SmsParams |
+		Web3GrantParams |
 		UserUpdateParams |
 		VerifyFactorParams |
 		VerifyParams |
@@ -100,6 +98,7 @@ type RequestParams interface {
 		adminUserDeleteParams |
 		security.GotrueRequest |
 		ChallengeFactorParams |
+
 		struct {
 			Email string `json:"email"`
 			Phone string `json:"phone"`
@@ -113,10 +112,10 @@ type RequestParams interface {
 func retrieveRequestParams[A RequestParams](r *http.Request, params *A) error {
 	body, err := utilities.GetBodyBytes(r)
 	if err != nil {
-		return internalServerError("Could not read body into byte slice").WithInternalError(err)
+		return apierrors.NewInternalServerError("Could not read body into byte slice").WithInternalError(err)
 	}
 	if err := json.Unmarshal(body, params); err != nil {
-		return badRequestError(ErrorCodeBadJSON, "Could not parse request body as JSON: %v", err)
+		return apierrors.NewBadRequestError(apierrors.ErrorCodeBadJSON, "Could not parse request body as JSON: %v", err)
 	}
 	return nil
 }

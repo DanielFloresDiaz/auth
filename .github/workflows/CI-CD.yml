@@ -363,12 +363,15 @@ jobs:
           TAG=${{ steps.deployment_env.outputs.tag }}
           ENV=${{ steps.deployment_env.outputs.environment }}
           
+          # Remove "v" prefix if present for Docker image tag
+          DOCKER_TAG=${TAG#v}
+
           # Create a kustomization overlay to set the image tag
           cd auth-kustomize/overlays/$ENV
-          kustomize edit set image ghcr.io/${{ github.repository }}=ghcr.io/${{ github.repository }}:$TAG
+          kustomize edit set image ghcr.io/${{ github.repository }}=ghcr.io/${{ github.repository }}:$DOCKER_TAG
           
           # Show the changes
-          echo "Deploying image with tag: $TAG"
+          echo "Deploying image with tag: $DOCKER_TAG"
           cat kustomization.yaml
       
       - name: Apply Kustomize configuration for dev
@@ -382,7 +385,7 @@ jobs:
           kubectl apply -k auth-kustomize/overlays/prod
       
       - name: Verify deployment
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
           ENV=${{ steps.deployment_env.outputs.environment }}
           TAG=${{ steps.deployment_env.outputs.tag }}

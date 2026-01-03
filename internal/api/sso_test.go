@@ -11,8 +11,8 @@ package api
 // 	"testing"
 // 	"time"
 
-// 	"auth/internal/conf"
-// 	"auth/internal/models"
+// 	"github.com/supabase/auth/internal/conf"
+// 	"github.com/supabase/auth/internal/models"
 // 	jwt "github.com/golang-jwt/jwt/v5"
 // 	"github.com/stretchr/testify/require"
 // 	"github.com/stretchr/testify/suite"

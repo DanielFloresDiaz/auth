@@ -1,7 +1,6 @@
 package security
 
 import (
-	"auth/internal/utilities"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -10,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/supabase/auth/internal/utilities"
 
 	"fmt"
 

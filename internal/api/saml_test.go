@@ -8,7 +8,7 @@ package api
 // 	"net/http"
 // 	"net/http/httptest"
 
-// 	"auth/internal/conf"
+// 	"github.com/supabase/auth/internal/conf"
 // 	"github.com/crewjam/saml"
 // 	"github.com/stretchr/testify/require"
 // )

@@ -2,19 +2,48 @@ package provider
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
 
-	"auth/internal/conf"
+	"github.com/supabase/auth/internal/conf"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
 )
 
-const IssuerApple = "https://appleid.apple.com"
+const DefaultAppleIssuer = "https://appleid.apple.com"
+const OtherAppleIssuer = "https://account.apple.com"
+
+func IsAppleIssuer(issuer string) bool {
+	return issuer == DefaultAppleIssuer || issuer == OtherAppleIssuer
+}
+
+func DetectAppleIDTokenIssuer(ctx context.Context, idToken string) (string, error) {
+	var payload struct {
+		Issuer string `json:"iss"`
+	}
+
+	parts := strings.Split(idToken, ".")
+	if len(parts) != 3 {
+		return "", fmt.Errorf("apple: invalid ID token")
+	}
+
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("apple: invalid ID token %w", err)
+	}
+
+	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+		return "", fmt.Errorf("apple: invalid ID token %w", err)
+	}
+
+	return payload.Issuer, nil
+}
 
 // AppleProvider stores the custom config for apple provider
 type AppleProvider struct {
@@ -69,7 +98,7 @@ func NewAppleProvider(ctx context.Context, ext conf.OAuthProviderConfiguration) 
 		logrus.Warn("Apple OAuth provider has URL config set which is ignored (check GOTRUE_EXTERNAL_APPLE_URL)")
 	}
 
-	oidcProvider, err := oidc.NewProvider(ctx, IssuerApple)
+	oidcProvider, err := oidc.NewProvider(ctx, DefaultAppleIssuer)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +149,8 @@ func (p AppleProvider) GetUserData(ctx context.Context, tok *oauth2.Token) (*Use
 	}
 
 	_, data, err := ParseIDToken(ctx, p.oidc, &oidc.Config{
-		ClientID: p.ClientID,
+		ClientID:        p.ClientID,
+		SkipIssuerCheck: true,
 	}, idToken.(string), ParseIDTokenOptions{
 		AccessToken: tok.AccessToken,
 	})

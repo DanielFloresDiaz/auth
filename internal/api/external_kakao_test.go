@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"time"
 
-	"auth/internal/api/provider"
-	"auth/internal/models"
+	"github.com/supabase/auth/internal/api/provider"
+	"github.com/supabase/auth/internal/models"
 
 	"github.com/gofrs/uuid"
 	jwt "github.com/golang-jwt/jwt/v5"

@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"auth/internal/conf"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"github.com/supabase/auth/internal/conf"
 )
 
 type TokenOIDCTestSuite struct {
@@ -60,10 +60,11 @@ func (ts *TokenOIDCTestSuite) TestGetProvider() {
 	ts.Config.External.AllowedIdTokenIssuers = []string{server.URL}
 
 	req := httptest.NewRequest(http.MethodPost, "http://localhost", nil)
-	oidcProvider, skipNonceCheck, providerType, acceptableClientIds, err := params.getProvider(context.Background(), ts.Config, req)
+	oidcProvider, skipNonceCheck, providerType, acceptableClientIds, emailOptional, err := params.getProvider(context.Background(), ts.Config, req)
 	require.NoError(ts.T(), err)
 	require.NotNil(ts.T(), oidcProvider)
 	require.False(ts.T(), skipNonceCheck)
+	require.False(ts.T(), emailOptional)
 	require.Equal(ts.T(), params.Provider, providerType)
 	require.NotEmpty(ts.T(), acceptableClientIds)
 }

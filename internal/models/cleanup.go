@@ -11,9 +11,9 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
-	"auth/internal/conf"
-	"auth/internal/observability"
-	"auth/internal/storage"
+	"github.com/supabase/auth/internal/conf"
+	"github.com/supabase/auth/internal/observability"
+	"github.com/supabase/auth/internal/storage"
 )
 
 type Cleaner interface {

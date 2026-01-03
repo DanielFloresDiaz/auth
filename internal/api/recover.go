@@ -3,8 +3,9 @@ package api
 import (
 	"net/http"
 
-	"auth/internal/models"
-	"auth/internal/storage"
+	"github.com/supabase/auth/internal/api/apierrors"
+	"github.com/supabase/auth/internal/models"
+	"github.com/supabase/auth/internal/storage"
 
 	"github.com/gofrs/uuid"
 )
@@ -20,7 +21,7 @@ type RecoverParams struct {
 
 func (p *RecoverParams) Validate(a *API) error {
 	if p.Email == "" {
-		return badRequestError(ErrorCodeValidationFailed, "Password recovery requires an email")
+		return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Password recovery requires an email")
 	}
 	var err error
 	if p.Email, err = a.validateEmail(p.Email); err != nil {
@@ -31,7 +32,7 @@ func (p *RecoverParams) Validate(a *API) error {
 	}
 
 	if p.OrganizationID == uuid.Nil && p.ProjectID == uuid.Nil {
-		return badRequestError(ErrorCodeValidationFailed, "Organization ID or Project ID is required")
+		return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Organization ID or Project ID is required")
 	}
 	return nil
 }
@@ -40,6 +41,8 @@ func (p *RecoverParams) Validate(a *API) error {
 func (a *API) Recover(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	db := a.db.WithContext(ctx)
+	config := a.config
+
 	params := &RecoverParams{}
 	if err := retrieveRequestParams(r, params); err != nil {
 		return err
@@ -59,7 +62,7 @@ func (a *API) Recover(w http.ResponseWriter, r *http.Request) error {
 		if models.IsNotFoundError(err) {
 			return sendJSON(w, http.StatusOK, map[string]string{})
 		}
-		return internalServerError("Unable to process request").WithInternalError(err)
+		return apierrors.NewInternalServerError("Unable to process request").WithInternalError(err)
 	}
 	if isPKCEFlow(flowType) {
 		if _, err := generateFlowState(db, models.Recovery.String(), models.Recovery, params.CodeChallengeMethod, params.CodeChallenge, &(user.ID), params.OrganizationID, params.ProjectID); err != nil {
@@ -68,7 +71,7 @@ func (a *API) Recover(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	err = db.Transaction(func(tx *storage.Connection) error {
-		if terr := models.NewAuditLogEntry(r, tx, user, models.UserRecoveryRequestedAction, "", nil); terr != nil {
+		if terr := models.NewAuditLogEntry(config.AuditLog, r, tx, user, models.UserRecoveryRequestedAction, "", nil); terr != nil {
 			return terr
 		}
 		return a.sendPasswordRecovery(r, tx, user, flowType)

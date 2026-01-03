@@ -162,38 +162,51 @@
         END;
         $$ LANGUAGE plpgsql;
 
-        CREATE OR REPLACE FUNCTION set_admin_organization_role()
-        RETURNS TRIGGER AS $$
-        BEGIN
-            -- Set the user as an admin if the OLD.project_id is not null and the NEW.organization_id is not null
-            IF OLD.project_id IS NOT NULL AND NEW.organization_id IS NOT NULL THEN
-                NEW.organization_role = 'admin';
-            END IF;
-            RETURN NEW;
-        END;
-        $$ LANGUAGE plpgsql;
-
         CREATE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION prevent_change_organization_project();
         CREATE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."flow_state" FOR EACH ROW EXECUTE FUNCTION prevent_change_organization_project();
         CREATE TRIGGER prevent_set_project_id BEFORE UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION prevent_set_project_id();
         CREATE TRIGGER update_organization_role BEFORE UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION update_organization_role();
         CREATE TRIGGER prevent_organization_project_null BEFORE INSERT OR UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION prevent_organization_project_null();
         CREATE TRIGGER prevent_organization_project_null BEFORE INSERT OR UPDATE ON "auth"."flow_state" FOR EACH ROW EXECUTE FUNCTION prevent_organization_project_null();
-        CREATE TRIGGER set_admin_organization_role BEFORE INSERT OR UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION set_admin_organization_role();
     </createProcedure>
     <rollback>
         DROP FUNCTION prevent_change_organization_project();
         DROP FUNCTION prevent_set_project_id();
         DROP FUNCTION update_organization_role();
         DROP FUNCTION prevent_organization_project_null();
-        DROP FUNCTION set_admin_organization_role();
         DROP TRIGGER prevent_change_organization_project ON "auth"."users";
         DROP TRIGGER prevent_change_organization_project ON "auth"."flow_state";
         DROP TRIGGER prevent_set_project_id ON "auth"."users";
         DROP TRIGGER update_organization_role ON "auth"."users";
         DROP TRIGGER prevent_organization_project_null ON "auth"."users";
         DROP TRIGGER prevent_organization_project_null ON "auth"."flow_state";
-        DROP TRIGGER set_admin_organization_role ON "auth"."users";
+    </rollback>
+</changeSet>
+
+<changeSet author="admin" id="solomon.auth.functions:4">
+    <createProcedure
+           dbms="postgresql"
+           >
+
+        CREATE OR REPLACE FUNCTION create_project_default_tier()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            INSERT INTO "auth".tier_organizations_tiers (project_id, tier, tier_model, tier_time, tier_usage)
+            VALUES (NEW.id, 'free', 'free', 'free', 'free')
+            ON CONFLICT (project_id, tier) DO NOTHING;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        CREATE TRIGGER trigger_create_default_tier
+        AFTER INSERT ON "auth".projects
+        FOR EACH ROW
+        EXECUTE FUNCTION create_project_default_tier();
+
+    </createProcedure>
+    <rollback>
+        DROP TRIGGER trigger_create_default_tier ON "auth".projects;
+        DROP FUNCTION create_project_default_tier();
     </rollback>
 </changeSet>
 
@@ -289,7 +302,6 @@
         DROP TRIGGER trigger_set_uuid ON "auth"."api_keys";
         DROP TRIGGER trigger_set_uuid ON "auth"."projects";
         DROP TRIGGER trigger_set_uuid ON "auth"."organizations";
-
     </rollback>
 </changeSet>
 <changeSet author="admin" id="solomon.public.functions:6">
@@ -334,6 +346,27 @@
         DROP TRIGGER prevent_set_project_id ON "auth"."identities";
         DROP TRIGGER prevent_organization_project_null ON "auth"."identities";
         DROP TRIGGER trigger_assign_project_id_before_insert ON auth.identities;
+    </rollback>
+</changeSet>
+<changeSet author="admin" id="solomon.auth.functions:3">
+    <createProcedure
+           dbms="postgresql">
+        CREATE OR REPLACE FUNCTION enforce_free_tier()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.tier := 'free';
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        CREATE TRIGGER trigger_enforce_free_tier
+        BEFORE INSERT ON "auth".organizations
+        FOR EACH ROW
+        EXECUTE FUNCTION enforce_free_tier();
+    </createProcedure>
+    <rollback>
+        DROP TRIGGER trigger_enforce_free_tier ON "auth".organizations;
+        DROP FUNCTION enforce_free_tier();
     </rollback>
 </changeSet>
 </databaseChangeLog>

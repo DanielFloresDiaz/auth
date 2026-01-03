@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"auth/internal/models"
+	"github.com/supabase/auth/internal/models"
 )
 
 const defaultPerPage = 50
