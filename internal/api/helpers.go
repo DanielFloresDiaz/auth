@@ -65,15 +65,6 @@ func (a *API) requestProjectID(ctx context.Context, r *http.Request) uuid.UUID {
 	return uuid.Nil
 }
 
-func isStringInSlice(checkValue string, list []string) bool {
-	for _, val := range list {
-		if val == checkValue {
-			return true
-		}
-	}
-	return false
-}
-
 type RequestParams interface {
 	AdminUserParams |
 		CreateSSOProviderParams |
