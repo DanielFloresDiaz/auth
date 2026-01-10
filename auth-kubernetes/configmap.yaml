@@ -4,6 +4,8 @@ metadata:
   name: auth-config
   namespace: auth
 data:
+  ENVIRONMENT: "prod"
+  DEPLOYMENT_ENVIRONMENT: "production"
   # JWT Configuration
   GOTRUE_JWT_EXP: "3600"
   GOTRUE_JWT_AUD: "authenticated"
@@ -35,7 +37,6 @@ data:
   
   # OAuth Configuration
   GOTRUE_EXTERNAL_GOOGLE_ENABLED: "true"
-  GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: "59413000494-dlrcgs6btub8oamochbqjd64su5v2s3a.apps.googleusercontent.com"
   GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: "https://solomon-auth.com/auth/callback" # Updated to domain name
   
   # Anonymous auth config

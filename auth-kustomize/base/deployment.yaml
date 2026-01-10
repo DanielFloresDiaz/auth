@@ -107,194 +107,210 @@ spec:
               echo "Cloud SQL Proxy is ready!"
               . /env-vars/env-secrets.sh
               exec auth
-          env:  
+          env:
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-generated-config
+                  key: ENVIRONMENT
+            - name: DEPLOYMENT_ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-generated-config
+                  key: DEPLOYMENT_ENVIRONMENT
             # JWT Configuration
             - name: GOTRUE_JWT_EXP
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_JWT_EXP
             - name: GOTRUE_JWT_AUD
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_JWT_AUD
             - name: GOTRUE_JWT_DEFAULT_GROUP_NAME
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_JWT_DEFAULT_GROUP_NAME
             - name: GOTRUE_JWT_ADMIN_ROLES
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_JWT_ADMIN_ROLES
             
             # Database Configuration
             - name: GOTRUE_DB_DRIVER
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_DB_DRIVER
             - name: DB_NAMESPACE
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: DB_NAMESPACE
             - name: DB_PORT
-              value: "5432"
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-generated-config
+                  key: DB_PORT
             - name: DB_HOST
-              value: "localhost"
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-generated-config
+                  key: DB_HOST
             - name: DB_NAME
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: DB_NAME
             - name: DB_USER
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: DB_USER
             
             # API Configuration
             - name: API_EXTERNAL_URL
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: API_EXTERNAL_URL
             - name: GOTRUE_API_HOST
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_API_HOST
             - name: PORT
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: PORT
             
             # OAuth Configuration
             - name: GOTRUE_EXTERNAL_GOOGLE_ENABLED
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_EXTERNAL_GOOGLE_ENABLED
             - name: GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI
             
             # Security Configuration
             - name: GOTRUE_LOG_LEVEL
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_LOG_LEVEL
             # Signup Configuration
             - name: GOTRUE_DISABLE_SIGNUP
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_DISABLE_SIGNUP
             - name: GOTRUE_SITE_URL
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_SITE_URL
             - name: GOTRUE_EXTERNAL_EMAIL_ENABLED
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_EXTERNAL_EMAIL_ENABLED
             - name: GOTRUE_EXTERNAL_PHONE_ENABLED
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_EXTERNAL_PHONE_ENABLED
             - name: GOTRUE_EXTERNAL_IOS_BUNDLE_ID
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_EXTERNAL_IOS_BUNDLE_ID
                   
             # Anonymous auth config
             - name: GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED
                   
             # PKCE Config
             - name: GOTRUE_EXTERNAL_FLOW_STATE_EXPIRY_DURATION
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_EXTERNAL_FLOW_STATE_EXPIRY_DURATION
                   
             # Phone provider config
             - name: GOTRUE_SMS_AUTOCONFIRM
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_SMS_AUTOCONFIRM
                   
             # Captcha config
             - name: GOTRUE_SECURITY_CAPTCHA_ENABLED
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_SECURITY_CAPTCHA_ENABLED
                   
             # SAML config
             - name: GOTRUE_EXTERNAL_SAML_ENABLED
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_EXTERNAL_SAML_ENABLED
                   
             # Additional Security config
             - name: GOTRUE_RATE_LIMIT_HEADER
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_RATE_LIMIT_HEADER
             - name: GOTRUE_RATE_LIMIT_EMAIL_SENT
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_RATE_LIMIT_EMAIL_SENT
             - name: GOTRUE_PASSWORD_MIN_LENGTH
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_PASSWORD_MIN_LENGTH
             - name: GOTRUE_PASSWORD_REQUIRED_CHARACTERS
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_PASSWORD_REQUIRED_CHARACTERS
             - name: GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED
             - name: GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL
                   
             # Auth Hook Configuration
             - name: GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_ENABLED
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_ENABLED
             - name: GOTRUE_HOOK_CUSTOM_SMS_PROVIDER_ENABLED
               valueFrom:
                 configMapKeyRef:
-                  name: auth-config
+                  name: auth-generated-config
                   key: GOTRUE_HOOK_CUSTOM_SMS_PROVIDER_ENABLED  
           volumeMounts:
             - name: secrets-store-volume
@@ -312,7 +328,7 @@ spec:
             - "--structured-logs"
             - "--port=5432"
             - "--address=0.0.0.0"
-            - "solomon-440015:europe-southwest1:solomon"
+            - "solomon-481015:europe-southwest1:solomon"
           resources:
             requests:
               cpu: "50m"
