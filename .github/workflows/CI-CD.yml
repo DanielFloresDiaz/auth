@@ -337,7 +337,10 @@ jobs:
           TAG=${GITHUB_REF#refs/tags/}
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           
-          if [[ $TAG == dev* ]]; then
+          # Remove 'v' prefix if present for version comparison
+          VERSION=${TAG#v}
+          
+          if [[ $TAG == dev* ]] || [[ $VERSION =~ ^0\. ]]; then
             echo "environment=dev" >> $GITHUB_OUTPUT
             echo "Deploying to development environment with tag: $TAG"
           else
