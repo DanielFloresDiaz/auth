@@ -36,12 +36,12 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: 1.23.7
-      - name: Checkout code
-        uses: actions/checkout@v2
       - name: Check gofmt
         run: |
           set -x
@@ -88,12 +88,12 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
-      - name: Checkout code
-        uses: actions/checkout@v2
       - name: Init Database
         run: psql -f hack/init_postgres.sql postgresql://postgres:root@localhost:5432/postgres
       - name: Run migrations
@@ -120,9 +120,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: 1.23.7
       - name: Download coverage file
@@ -207,9 +207,9 @@ jobs:
       packages: write  # Required for pushing to GHCR
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: 1.23.7
           
@@ -249,7 +249,6 @@ jobs:
             # For dev tags, use a single fixed "dev" tag
             ${{ steps.tag_version.outputs.is_dev_tag == 'true' && format('type=raw,value={0}', steps.tag_version.outputs.version) || '' }}
             # For production releases, use semantic versioning tags
-            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=raw,value=${{ steps.tag_version.outputs.version }}' || '' }}
             ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{version}}' || '' }}
             ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{major}}.{{minor}}' || '' }}
             ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{major}}' || '' }}
@@ -366,12 +365,15 @@ jobs:
           TAG=${{ steps.deployment_env.outputs.tag }}
           ENV=${{ steps.deployment_env.outputs.environment }}
           
+          # Remove "v" prefix if present for Docker image tag
+          DOCKER_TAG=${TAG#v}
+          
           # Create a kustomization overlay to set the image tag
           cd auth-kustomize/overlays/$ENV
-          kustomize edit set image ghcr.io/${{ github.repository }}=ghcr.io/${{ github.repository }}:$TAG
+          kustomize edit set image ghcr.io/${{ github.repository }}=ghcr.io/${{ github.repository }}:$DOCKER_TAG
           
           # Show the changes
-          echo "Deploying image with tag: $TAG"
+          echo "Deploying image with tag: $DOCKER_TAG"
           cat kustomization.yaml
       
       - name: Apply Kustomize configuration for dev
@@ -390,6 +392,9 @@ jobs:
           ENV=${{ steps.deployment_env.outputs.environment }}
           TAG=${{ steps.deployment_env.outputs.tag }}
           
+          # Remove "v" prefix if present for Docker image tag comparison
+          DOCKER_TAG=${TAG#v}
+          
           # Set the correct deployment name based on environment
           if [[ "$ENV" == "dev" ]]; then
             DEPLOYMENT_NAME="dev-auth-deployment"
@@ -406,7 +411,7 @@ jobs:
           DEPLOYED_IMAGE=$(kubectl get deployment/$DEPLOYMENT_NAME -n auth -o jsonpath='{.spec.template.spec.containers[0].image}')
           echo "✅ Deployed image: $DEPLOYED_IMAGE"
           
-          if [[ "$DEPLOYED_IMAGE" == *"$TAG"* ]]; then
+          if [[ "$DEPLOYED_IMAGE" == *"$DOCKER_TAG"* ]]; then
             echo "✅ Correct image tag deployed!"
           else
             echo "❌ Incorrect image tag deployed!"
