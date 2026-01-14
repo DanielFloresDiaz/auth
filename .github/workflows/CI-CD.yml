@@ -282,16 +282,17 @@ jobs:
       - name: Create Release
         if: steps.tag_version.outputs.is_dev_tag != 'true'
         id: create_release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             auth
             auth-linux-amd64
             auth-linux-arm64
-          tag_name: ${{ github.ref }}
+          tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false
+          overwrite_files: true
 
   deploy:
     needs: [release]
@@ -318,6 +319,7 @@ jobs:
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
       
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -355,6 +357,22 @@ jobs:
         if: steps.deployment_env.outputs.environment == 'prod'
         run: gcloud container clusters get-credentials ${{ secrets.GKE_PROD_CLUSTER_NAME }} --region ${{ secrets.GKE_CLUSTER_REGION }} --project ${{ secrets.GCP_PROJECT_ID }}
       
+      - name: Ensure base Kubernetes resources exist
+        run: |
+          ENV=${{ steps.deployment_env.outputs.environment }}
+          kubectl apply -f auth-kubernetes/namespace.yaml
+          kubectl apply -f auth-kubernetes/serviceaccount.yaml
+          kubectl apply -f auth-kubernetes/app-secrets.yaml
+          kubectl apply -f auth-kubernetes/configmap.yaml
+          kubectl apply -f auth-kubernetes/frontend-config.yaml
+          kubectl apply -f auth-kubernetes/managed-cert.yaml
+          
+          # Apply environment specific services
+          kubectl apply -f auth-kubernetes/services/service-$ENV.yaml
+          
+          # Apply network policies
+          kubectl apply -f auth-kubernetes/auth-network-policy.yaml
+      
       - name: Install Kustomize
         run: |
           curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
@@ -370,7 +388,10 @@ jobs:
           
           # Create a kustomization overlay to set the image tag
           cd auth-kustomize/overlays/$ENV
-          kustomize edit set image ghcr.io/${{ github.repository }}=ghcr.io/${{ github.repository }}:$DOCKER_TAG
+          
+          # Force lowercase for image name to match GHCR and existing manifests
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr 'A-Z' 'a-z')
+          kustomize edit set image ghcr.io/$REPO_LOWER=ghcr.io/$REPO_LOWER:$DOCKER_TAG
           
           # Show the changes
           echo "Deploying image with tag: $DOCKER_TAG"
