@@ -106,6 +106,7 @@ spec:
               done
               echo "Cloud SQL Proxy is ready!"
               . /env-vars/env-secrets.sh
+              export DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
               exec auth
           env:
             - name: ENVIRONMENT
