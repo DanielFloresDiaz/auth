@@ -30,7 +30,7 @@
         CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".smtp_configs_organizations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
         CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".smtp_configs_projects FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
         CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".organization_roles_permissions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".tier_organizations_tiers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".projects_tiers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
         CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".refresh_tokens FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
         CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".instances FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
         CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".identities FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -54,7 +54,7 @@
         DROP TRIGGER trigger_update_timestamp ON "auth".smtp_configs_organizations;
         DROP TRIGGER trigger_update_timestamp ON "auth".smtp_configs_projects;
         DROP TRIGGER trigger_update_timestamp ON "auth".organization_roles_permissions;
-        DROP TRIGGER trigger_update_timestamp ON "auth".tier_organizations_tiers;
+        DROP TRIGGER trigger_update_timestamp ON "auth".projects_tiers;
         DROP TRIGGER trigger_update_timestamp ON "auth".refresh_tokens;
         DROP TRIGGER trigger_update_timestamp ON "auth".instances;
         DROP TRIGGER trigger_update_timestamp ON "auth".identities;
@@ -82,7 +82,7 @@
             COMMENT ON TABLE "auth".smtp_configs_organizations IS 'Auth: Stores SMTP configurations for organizations.';
             COMMENT ON TABLE "auth".smtp_configs_projects IS 'Auth: Stores SMTP configurations for projects.';
             COMMENT ON TABLE "auth".organization_roles_permissions IS 'Auth: Stores organization roles and permissions.';
-            COMMENT ON TABLE "auth".tier_organizations_tiers IS 'Auth: Stores tier organizations tiers.';
+            COMMENT ON TABLE "auth".projects_tiers IS 'Auth: Stores projects tiers.';
 
      </createProcedure>
      <rollback>
@@ -191,7 +191,7 @@
         CREATE OR REPLACE FUNCTION create_project_default_tier()
         RETURNS TRIGGER AS $$
         BEGIN
-            INSERT INTO "auth".tier_organizations_tiers (project_id, tier, tier_model, tier_time, tier_usage)
+            INSERT INTO "auth".projects_tiers (project_id, tier, tier_model, tier_time, tier_usage)
             VALUES (NEW.id, 'free', 'free', 'free', 'free')
             ON CONFLICT (project_id, tier) DO NOTHING;
             RETURN NEW;
@@ -304,32 +304,6 @@
         DROP TRIGGER trigger_set_uuid ON "auth"."organizations";
     </rollback>
 </changeSet>
-<changeSet author="admin" id="solomon.public.functions:6">
-    <createProcedure
-           dbms="postgresql">
-            CREATE OR REPLACE FUNCTION assign_project_id_if_missing()
-            RETURNS trigger AS $$
-            BEGIN
-                IF NEW.project_id IS NULL THEN
-                    SELECT project_id
-                      INTO NEW.project_id
-                      FROM auth.organizations
-                      WHERE id = NEW.organization_id;
-                END IF;
-                RETURN NEW;
-            END;
-            $$ LANGUAGE plpgsql;
-
-            CREATE TRIGGER trigger_assign_project_id_before_insert
-            BEFORE INSERT ON auth.users
-            FOR EACH ROW
-            EXECUTE FUNCTION assign_project_id_if_missing();
-    </createProcedure>
-    <rollback>
-        DROP TRIGGER trigger_assign_project_id_before_insert ON auth.users;
-        DROP FUNCTION assign_project_id_if_missing();
-    </rollback>
-</changeSet>
 
 <changeSet author="admin" id="solomon.public.functions:7">
     <createProcedure
@@ -339,13 +313,11 @@
         CREATE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_change_organization_project();
         CREATE TRIGGER prevent_set_project_id BEFORE UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_set_project_id();
         CREATE TRIGGER prevent_organization_project_null BEFORE INSERT OR UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_organization_project_null();
-        CREATE TRIGGER trigger_assign_project_id_before_insert BEFORE INSERT ON auth.identities FOR EACH ROW EXECUTE FUNCTION assign_project_id_if_missing();
     </createProcedure>
     <rollback>
         DROP TRIGGER prevent_change_organization_project ON "auth"."identities";
         DROP TRIGGER prevent_set_project_id ON "auth"."identities";
         DROP TRIGGER prevent_organization_project_null ON "auth"."identities";
-        DROP TRIGGER trigger_assign_project_id_before_insert ON auth.identities;
     </rollback>
 </changeSet>
 <changeSet author="admin" id="solomon.auth.functions:3">
@@ -360,12 +332,12 @@
         $$ LANGUAGE plpgsql;
 
         CREATE TRIGGER trigger_enforce_free_tier
-        BEFORE INSERT ON "auth".organizations
+        BEFORE INSERT ON "auth".organizations_tier
         FOR EACH ROW
         EXECUTE FUNCTION enforce_free_tier();
     </createProcedure>
     <rollback>
-        DROP TRIGGER trigger_enforce_free_tier ON "auth".organizations;
+        DROP TRIGGER trigger_enforce_free_tier ON "auth".organizations_tier;
         DROP FUNCTION enforce_free_tier();
     </rollback>
 </changeSet>
