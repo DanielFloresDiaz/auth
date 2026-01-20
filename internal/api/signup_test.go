@@ -24,8 +24,10 @@ import (
 
 type SignupTestSuite struct {
 	suite.Suite
-	API    *API
-	Config *conf.GlobalConfiguration
+	API            *API
+	Config         *conf.GlobalConfiguration
+	OrganizationID uuid.UUID
+	ProjectID      uuid.UUID
 }
 
 func TestSignup(t *testing.T) {
@@ -42,29 +44,8 @@ func TestSignup(t *testing.T) {
 }
 
 func (ts *SignupTestSuite) SetupTest() {
-	models.TruncateAll(ts.API.db)
-
-	project_id := uuid.Must(uuid.NewV4())
-	// Create a project
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Create the admin of the organization
-	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
-	require.NoError(ts.T(), err, "Error making new user")
-	require.NoError(ts.T(), ts.API.db.Create(user, "organization_id", "organization_role"), "Error creating user")
-
-	// Create the organization if it doesn't exist
-	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Set the user as the admin of the organization
-	if err := ts.API.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
+	// Initialize the database with project, organization, and admin user
+	ts.ProjectID, ts.OrganizationID, _ = InitializeTestDatabase(ts.T(), ts.API, ts.Config)
 }
 
 // TestSignup tests API /signup route
@@ -77,7 +58,8 @@ func (ts *SignupTestSuite) TestSignup() {
 		"data": map[string]interface{}{
 			"a": 1,
 		},
-		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+		"organization_id": ts.OrganizationID.String(),
+		"project_id":      ts.ProjectID.String(),
 	}))
 
 	// Setup request
@@ -112,7 +94,8 @@ func (ts *SignupTestSuite) TestSignupTwice() {
 			"data": map[string]interface{}{
 				"a": 1,
 			},
-			"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+			"organization_id": ts.OrganizationID.String(),
+			"project_id":      ts.ProjectID.String(),
 		}))
 	}
 
@@ -127,8 +110,7 @@ func (ts *SignupTestSuite) TestSignupTwice() {
 	y := httptest.NewRecorder()
 
 	ts.API.handler.ServeHTTP(y, req)
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test1@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test1@example.com", ts.Config.JWT.Aud, ts.OrganizationID, uuid.Nil)
 	if err == nil {
 		require.NoError(ts.T(), u.Confirm(ts.API.db))
 	}
@@ -150,17 +132,16 @@ func (ts *SignupTestSuite) TestSignupTwice() {
 }
 
 func (ts *SignupTestSuite) TestVerifySignup() {
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	user, err := models.NewUser("123456789", "test@example.com", "testing", ts.Config.JWT.Aud, nil, id, uuid.Nil)
+	user, err := models.NewUser("123456789", "test@example.com", "testing", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
 	user.ConfirmationToken = "asdf3"
 	now := time.Now()
 	user.ConfirmationSentAt = &now
 	require.NoError(ts.T(), err)
-	require.NoError(ts.T(), ts.API.db.Create(user, "organization_role", "project_id"))
+	require.NoError(ts.T(), ts.API.db.Create(user, "organization_role"))
 	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, user.ID, user.GetEmail(), user.ConfirmationToken, models.ConfirmationToken))
 
 	// Find test user
-	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, uuid.Nil)
 	require.NoError(ts.T(), err)
 
 	// Setup request

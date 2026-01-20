@@ -238,7 +238,7 @@ func (a *API) internalExternalProviderCallback(w http.ResponseWriter, r *http.Re
 
 	if flowState != nil {
 		organization_id = flowState.OrganizationID.UUID
-		project_id = flowState.ProjectID.UUID
+		project_id = flowState.ProjectID
 	} else {
 		organization_id = getOrganizationID(ctx)
 		project_id = getProjectID(ctx)
@@ -394,24 +394,16 @@ func (a *API) createAccountFromExternalIdentity(tx *storage.Connection, r *http.
 		// computationally hard so it can be used within a database
 		// transaction
 		user, terr = params.ToUserModel(isSSOUser)
-		var excludeColumns []string
-		excludeColumns = append(excludeColumns, "organization_role")
-		if user.OrganizationID.UUID == uuid.Nil {
-			excludeColumns = append(excludeColumns, "organization_id")
-		}
-		if user.ProjectID.UUID == uuid.Nil {
-			excludeColumns = append(excludeColumns, "project_id")
-		}
 
 		if terr != nil {
 			return 0, nil, terr
 		}
 
-		if user, terr = a.signupNewUser(tx, user, excludeColumns...); terr != nil {
+		if user, terr = a.signupNewUser(tx, user); terr != nil {
 			return 0, nil, terr
 		}
 
-		if identity, terr = a.createNewIdentity(tx, user, providerType, identityData, excludeColumns...); terr != nil {
+		if identity, terr = a.createNewIdentity(tx, user, providerType, identityData); terr != nil {
 			return 0, nil, terr
 		}
 		user.Identities = append(user.Identities, *identity)

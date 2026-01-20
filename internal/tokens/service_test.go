@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -33,7 +32,10 @@ func (m *panicHookManager) InvokeHook(tx *storage.Connection, r *http.Request, i
 type RefreshTokenV2Suite struct {
 	suite.Suite
 
-	Conn *storage.Connection
+	Conn           *storage.Connection
+	Config         *conf.GlobalConfiguration
+	OrganizationID uuid.UUID
+	ProjectID      uuid.UUID
 
 	User *models.User
 }
@@ -41,42 +43,22 @@ type RefreshTokenV2Suite struct {
 func TestRefreshTokenV2(t *testing.T) {
 	ts := &RefreshTokenV2Suite{}
 
-	conn, err := test.SetupDBConnection(ts.config())
+	config := ts.config()
+	conn, err := test.SetupDBConnection(config)
 	require.NoError(t, err)
 
 	ts.Conn = conn
+	ts.Config = config
 	defer conn.Close()
 
 	suite.Run(t, ts)
 }
 
 func (ts *RefreshTokenV2Suite) SetupTest() {
-	models.TruncateAll(ts.Conn)
-
-	project_id := uuid.Must(uuid.NewV4())
-	// Create a project
-	if err := ts.Conn.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Create the admin of the organization
-	user, err := models.NewUser("", "admin@example.com", "test", "authenticated", nil, uuid.Nil, project_id)
-	require.NoError(ts.T(), err)
-	require.NoError(ts.T(), ts.Conn.Create(user, "organization_id", "organization_role"))
-
-	// Create the organization
-	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	if err := ts.Conn.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Set the user as the admin of the organization
-	if err := ts.Conn.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
+	ts.ProjectID, ts.OrganizationID, _ = models.InitializeTestDatabase(ts.T(), ts.Conn, ts.Config)
 
 	// Create test user
-	u, err := models.NewUser("", "test@example.com", "password", "authenticated", nil, organization_id, uuid.Nil)
+	u, err := models.NewUser("", "test@example.com", "password", "authenticated", nil, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 	require.NoError(ts.T(), ts.Conn.Create(u))
 
@@ -821,9 +803,11 @@ func parseIDTokenClaims(idToken string, config *conf.GlobalConfiguration) (jwt.M
 // IDTokenTestSuite tests ID token generation with different scopes
 type IDTokenTestSuite struct {
 	suite.Suite
-	Conn   *storage.Connection
-	User   *models.User
-	Config *conf.GlobalConfiguration
+	Conn           *storage.Connection
+	User           *models.User
+	Config         *conf.GlobalConfiguration
+	OrganizationID uuid.UUID
+	ProjectID      uuid.UUID
 }
 
 func TestIDTokenGeneration(t *testing.T) {
@@ -843,32 +827,10 @@ func TestIDTokenGeneration(t *testing.T) {
 }
 
 func (ts *IDTokenTestSuite) SetupTest() {
-	models.TruncateAll(ts.Conn)
-
-	project_id := uuid.Must(uuid.NewV4())
-	// Create a project
-	if err := ts.Conn.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Create the admin of the organization
-	user, err := models.NewUser("", "admin@example.com", "test", "authenticated", nil, uuid.Nil, project_id)
-	require.NoError(ts.T(), err)
-	require.NoError(ts.T(), ts.Conn.Create(user, "organization_id", "organization_role"))
-
-	// Create the organization
-	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	if err := ts.Conn.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Set the user as the admin of the organization
-	if err := ts.Conn.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
+	ts.ProjectID, ts.OrganizationID, _ = models.InitializeTestDatabase(ts.T(), ts.Conn, ts.Config)
 
 	// Create test user
-	u, err := models.NewUser("", "test@example.com", "password", "authenticated", nil, organization_id, uuid.Nil)
+	u, err := models.NewUser("", "test@example.com", "password", "authenticated", nil, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 
 	// Set user properties for testing scope-based claims

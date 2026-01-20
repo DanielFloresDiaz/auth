@@ -53,36 +53,13 @@ func TestVerify(t *testing.T) {
 }
 
 func (ts *VerifyTestSuite) SetupTest() {
-	models.TruncateAll(ts.API.db)
-
-	project_id := uuid.Must(uuid.NewV4())
-	ts.ProjectID = project_id
-	// Create a project
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Create the admin of the organization
-	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
-	require.NoError(ts.T(), err, "Error making new user")
-	require.NoError(ts.T(), ts.API.db.Create(user, "organization_id", "organization_role"), "Error creating user")
-
-	// Create the organization
-	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	ts.OrganizationID = organization_id
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Set the user as the admin of the organization
-	if err := ts.API.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
+	// Initialize the database with project, organization, and admin user
+	ts.ProjectID, ts.OrganizationID, _ = InitializeTestDatabase(ts.T(), ts.API, ts.Config)
 
 	// Create user
-	u, err := models.NewUser("12345678", "test@example.com", "password", ts.Config.JWT.Aud, nil, organization_id, uuid.Nil)
+	u, err := models.NewUser("12345678", "test@example.com", "password", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err, "Error creating test user model")
-	require.NoError(ts.T(), ts.API.db.Create(u, "project_id", "organization_role"), "Error saving new test user")
+	require.NoError(ts.T(), ts.API.db.Create(u, "organization_role"), "Error saving new test user")
 
 	// Create identity
 	i, err := models.NewIdentity(u, "email", map[string]interface{}{
@@ -91,7 +68,7 @@ func (ts *VerifyTestSuite) SetupTest() {
 		"email_verified": false,
 	})
 	require.NoError(ts.T(), err, "Error creating test identity model")
-	require.NoError(ts.T(), ts.API.db.Create(i, "project_id", "organization_role"), "Error saving new test identity")
+	require.NoError(ts.T(), ts.API.db.Create(i, "organization_role"), "Error saving new test identity")
 }
 
 func (ts *VerifyTestSuite) TestVerifyPasswordRecovery() {
@@ -114,6 +91,7 @@ func (ts *VerifyTestSuite) TestVerifyPasswordRecovery() {
 			body: map[string]interface{}{
 				"email":           testEmail,
 				"organization_id": ts.OrganizationID.String(),
+				"project_id":      ts.ProjectID.String(),
 			},
 			isPKCE: false,
 		},
@@ -125,6 +103,7 @@ func (ts *VerifyTestSuite) TestVerifyPasswordRecovery() {
 				"code_challenge":        "6b151854-cc15-4e29-8db7-3d3a9f15b3066b151854-cc15-4e29-8db7-3d3a9f15b306",
 				"code_challenge_method": models.SHA256.String(),
 				"organization_id":       ts.OrganizationID.String(),
+				"project_id":            ts.ProjectID.String(),
 			},
 			isPKCE: true,
 		},
@@ -197,6 +176,7 @@ func (ts *VerifyTestSuite) TestVerifySecureEmailChange() {
 			body: map[string]interface{}{
 				"email":           newEmail,
 				"organization_id": ts.OrganizationID.String(),
+				"project_id":      ts.ProjectID.String(),
 			},
 			isPKCE:       false,
 			currentEmail: currentEmail,
@@ -210,6 +190,7 @@ func (ts *VerifyTestSuite) TestVerifySecureEmailChange() {
 				"code_challenge":        "6b151854-cc15-4e29-8db7-3d3a9f15b3066b151854-cc15-4e29-8db7-3d3a9f15b306",
 				"code_challenge_method": models.SHA256.String(),
 				"organization_id":       ts.OrganizationID.String(),
+				"project_id":            ts.ProjectID.String(),
 			},
 			isPKCE:       true,
 			currentEmail: newEmail,
@@ -409,6 +390,7 @@ func (ts *VerifyTestSuite) TestInvalidOtp() {
 				"token":           u.ConfirmationToken,
 				"phone":           u.GetPhone(),
 				"organization_id": ts.OrganizationID.String(),
+				"project_id":      ts.ProjectID.String(),
 			},
 			expected: expectedResponse,
 		},
@@ -420,6 +402,7 @@ func (ts *VerifyTestSuite) TestInvalidOtp() {
 				"token":           "invalid_otp",
 				"phone":           u.GetPhone(),
 				"organization_id": ts.OrganizationID.String(),
+				"project_id":      ts.ProjectID.String(),
 			},
 			expected: expectedResponse,
 		},
@@ -431,6 +414,7 @@ func (ts *VerifyTestSuite) TestInvalidOtp() {
 				"token":           "invalid_otp",
 				"phone":           u.PhoneChange,
 				"organization_id": ts.OrganizationID.String(),
+				"project_id":      ts.ProjectID.String(),
 			},
 			expected: expectedResponse,
 		},
@@ -442,6 +426,7 @@ func (ts *VerifyTestSuite) TestInvalidOtp() {
 				"token":           "invalid_otp",
 				"email":           u.GetEmail(),
 				"organization_id": ts.OrganizationID.String(),
+				"project_id":      ts.ProjectID.String(),
 			},
 			expected: expectedResponse,
 		},
@@ -453,6 +438,7 @@ func (ts *VerifyTestSuite) TestInvalidOtp() {
 				"token":           "invalid_otp",
 				"email":           u.GetEmail(),
 				"organization_id": ts.OrganizationID.String(),
+				"project_id":      ts.ProjectID.String(),
 			},
 			expected: expectedResponse,
 		},
@@ -809,7 +795,7 @@ func (ts *VerifyTestSuite) TestVerifyPKCEOTP() {
 
 			require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(c.payload))
 			codeChallenge := "codechallengecodechallengcodechallengcodechallengcodechallenge"
-			flowState := models.NewFlowState(c.authenticationMethod.String(), codeChallenge, models.SHA256, c.authenticationMethod, &u.ID, ts.OrganizationID, uuid.Nil)
+			flowState := models.NewFlowState(c.authenticationMethod.String(), codeChallenge, models.SHA256, c.authenticationMethod, &u.ID, ts.OrganizationID, ts.ProjectID)
 			require.NoError(ts.T(), ts.API.db.Create(flowState))
 
 			requestUrl := fmt.Sprintf("http://localhost/verify?type=%v&token=%v", c.payload.Type, c.payload.Token)
@@ -1310,7 +1296,7 @@ func (ts *VerifyTestSuite) TestVerifyValidateParams() {
 			params: &VerifyParams{
 				Type:           "signup",
 				Token:          "some-token-hash",
-				OrganizationID: uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				OrganizationID: ts.OrganizationID,
 			},
 			method:   http.MethodGet,
 			expected: nil,
@@ -1319,7 +1305,7 @@ func (ts *VerifyTestSuite) TestVerifyValidateParams() {
 			desc: "Successful POST Verify (TokenHash)",
 			params: &VerifyParams{
 				Type:           "signup",
-				OrganizationID: uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				OrganizationID: ts.OrganizationID,
 				TokenHash:      "some-token-hash",
 			},
 			method:   http.MethodPost,
@@ -1330,7 +1316,7 @@ func (ts *VerifyTestSuite) TestVerifyValidateParams() {
 			params: &VerifyParams{
 				Type:           "signup",
 				Token:          "some-token",
-				OrganizationID: uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				OrganizationID: ts.OrganizationID,
 				Email:          "email@example.com",
 			},
 			method:   http.MethodPost,
@@ -1341,7 +1327,7 @@ func (ts *VerifyTestSuite) TestVerifyValidateParams() {
 			desc: "Need to send email or phone number with token",
 			params: &VerifyParams{
 				Type:           "signup",
-				OrganizationID: uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				OrganizationID: ts.OrganizationID,
 				Token:          "some-token",
 			},
 			method:   http.MethodPost,
@@ -1352,7 +1338,7 @@ func (ts *VerifyTestSuite) TestVerifyValidateParams() {
 			params: &VerifyParams{
 				Type:           "signup",
 				Token:          "some-token",
-				OrganizationID: uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				OrganizationID: ts.OrganizationID,
 				TokenHash:      "some-token-hash",
 			},
 			method:   http.MethodPost,
@@ -1362,7 +1348,7 @@ func (ts *VerifyTestSuite) TestVerifyValidateParams() {
 			desc: "No verification type specified",
 			params: &VerifyParams{
 				Token:          "some-token",
-				OrganizationID: uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				OrganizationID: ts.OrganizationID,
 				Email:          "email@example.com",
 			},
 			method:   http.MethodPost,

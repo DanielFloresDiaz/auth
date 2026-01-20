@@ -45,31 +45,7 @@ func TestE2EAPI(t *testing.T) {
 }
 
 func (ts *E2EAPITestSuite) SetupTest() {
-	models.TruncateAll(ts.Instance.Conn)
-
-	project_id := uuid.Must(uuid.NewV4())
-	ts.ProjectID = project_id
-	// Create a project
-	if err := ts.Instance.Conn.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Create the admin of the organization
-	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
-	require.NoError(ts.T(), err, "Error making new user")
-	require.NoError(ts.T(), ts.Instance.Conn.Create(user, "organization_id", "organization_role"), "Error creating user")
-
-	// Create the organization
-	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	ts.OrganizationID = organization_id
-	if err := ts.Instance.Conn.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Set the user as the admin of the organization
-	if err := ts.Instance.Conn.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
+	ts.ProjectID, ts.OrganizationID, _ = models.InitializeTestDatabase(ts.T(), ts.Instance.Conn, ts.Config)
 }
 
 func (ts *E2EAPITestSuite) TestInstance() {
@@ -82,6 +58,7 @@ func (ts *E2EAPITestSuite) TestInstance() {
 			Email:          email,
 			Password:       "password",
 			OrganizationID: ts.OrganizationID,
+			ProjectID:      ts.ProjectID,
 		}
 		res := new(models.User)
 		err := Do(ctx, http.MethodPost, ts.Instance.APIServer.URL+"/signup", req, res)
@@ -94,6 +71,7 @@ func (ts *E2EAPITestSuite) TestInstance() {
 		req := &api.InviteParams{
 			Email:          email,
 			OrganizationID: ts.OrganizationID,
+			ProjectID:      ts.ProjectID,
 		}
 		res := new(models.User)
 

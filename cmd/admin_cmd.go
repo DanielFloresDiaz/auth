@@ -37,8 +37,8 @@ func adminCmd() *cobra.Command {
 var adminCreateUserCmd = cobra.Command{
 	Use: "createuser",
 	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) < 3 {
-			logrus.Fatal("Not enough arguments to createuser command. Expected at least email, password and organization_id values")
+		if len(args) < 4 {
+			logrus.Fatal("Not enough arguments to createuser command. Expected at least email, password, organization_id and project_id values")
 			return
 		}
 
@@ -66,22 +66,23 @@ func adminCreateUser(config *conf.GlobalConfiguration, args []string) {
 	defer db.Close()
 
 	aud := getAudience(config)
-	id := uuid.Must(uuid.FromString(args[2]))
+	organization_id := uuid.Must(uuid.FromString(args[2]))
+	project_id := uuid.Must(uuid.FromString(args[3]))
 
-	if user, err := models.IsDuplicatedEmail(db, args[0], aud, nil, config.Experimental.ProvidersWithOwnLinkingDomain, id, uuid.Nil); user != nil {
+	if user, err := models.IsDuplicatedEmail(db, args[0], aud, nil, config.Experimental.ProvidersWithOwnLinkingDomain, organization_id, project_id); user != nil {
 		logrus.Fatalf("Error creating new user: user already exists")
 	} else if err != nil {
 		logrus.Fatalf("Error checking user email: %+v", err)
 	}
 
-	user, err := models.NewUser("", args[0], args[1], aud, nil, id, uuid.Nil)
+	user, err := models.NewUser("", args[0], args[1], aud, nil, organization_id, project_id)
 	if err != nil {
 		logrus.Fatalf("Error creating new user: %+v", err)
 	}
 
 	err = db.Transaction(func(tx *storage.Connection) error {
 		var terr error
-		if terr = tx.Create(user, "project_id", "organization_role"); terr != nil {
+		if terr = tx.Create(user, "organization_role"); terr != nil {
 			return terr
 		}
 

@@ -26,6 +26,7 @@ type OtpParams struct {
 	CodeChallengeMethod string                 `json:"code_challenge_method"`
 	CodeChallenge       string                 `json:"code_challenge"`
 	OrganizationID      uuid.UUID              `json:"organization_id"`
+	ProjectID           uuid.UUID              `json:"project_id"`
 }
 
 // SmsParams contains the request body params for sms otp
@@ -36,6 +37,7 @@ type SmsParams struct {
 	CodeChallengeMethod string                 `json:"code_challenge_method"`
 	CodeChallenge       string                 `json:"code_challenge"`
 	OrganizationID      uuid.UUID              `json:"organization_id"`
+	ProjectID           uuid.UUID              `json:"project_id"`
 }
 
 func (p *OtpParams) Validate() error {
@@ -51,6 +53,10 @@ func (p *OtpParams) Validate() error {
 	if p.OrganizationID == uuid.Nil {
 		return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Organization ID is required")
 	}
+
+	if p.ProjectID == uuid.Nil {
+		return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Project ID is required")
+	}
 	return nil
 }
 
@@ -65,6 +71,10 @@ func (p *SmsParams) Validate(config *conf.GlobalConfiguration) error {
 	}
 	if p.OrganizationID == uuid.Nil {
 		return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Organization ID is required")
+	}
+
+	if p.ProjectID == uuid.Nil {
+		return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Project ID is required")
 	}
 	return nil
 }

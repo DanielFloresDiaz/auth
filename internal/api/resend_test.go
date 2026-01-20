@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,8 +19,10 @@ import (
 
 type ResendTestSuite struct {
 	suite.Suite
-	API    *API
-	Config *conf.GlobalConfiguration
+	API            *API
+	Config         *conf.GlobalConfiguration
+	OrganizationID uuid.UUID
+	ProjectID      uuid.UUID
 }
 
 func TestResend(t *testing.T) {
@@ -38,29 +39,7 @@ func TestResend(t *testing.T) {
 }
 
 func (ts *ResendTestSuite) SetupTest() {
-	models.TruncateAll(ts.API.db)
-
-	project_id := uuid.Must(uuid.NewV4())
-	// Create a project
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Create the admin of the organization
-	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
-	require.NoError(ts.T(), err, "Error making new user")
-	require.NoError(ts.T(), ts.API.db.Create(user, "organization_id", "organization_role"), "Error creating user")
-
-	// Create the organization
-	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Set the user as the admin of the organization
-	if err := ts.API.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
+	ts.ProjectID, ts.OrganizationID, _ = InitializeTestDatabase(ts.T(), ts.API, ts.Config)
 }
 
 func (ts *ResendTestSuite) TestResendValidation() {
@@ -74,7 +53,7 @@ func (ts *ResendTestSuite) TestResendValidation() {
 			params: map[string]interface{}{
 				"type":            "invalid",
 				"email":           "foo@example.com",
-				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"organization_id": ts.OrganizationID.String(),
 			},
 			expected: map[string]interface{}{
 				"code":    http.StatusBadRequest,
@@ -85,7 +64,7 @@ func (ts *ResendTestSuite) TestResendValidation() {
 			desc: "Type & email mismatch",
 			params: map[string]interface{}{
 				"type":            "sms",
-				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"organization_id": ts.OrganizationID.String(),
 				"email":           "foo@example.com",
 			},
 			expected: map[string]interface{}{
@@ -97,7 +76,7 @@ func (ts *ResendTestSuite) TestResendValidation() {
 			desc: "Phone & email change type",
 			params: map[string]interface{}{
 				"type":            "email_change",
-				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"organization_id": ts.OrganizationID.String(),
 				"phone":           "+123456789",
 			},
 			expected: map[string]interface{}{
@@ -110,7 +89,7 @@ func (ts *ResendTestSuite) TestResendValidation() {
 			params: map[string]interface{}{
 				"type":            "email_change",
 				"phone":           "+123456789",
-				"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+				"organization_id": ts.OrganizationID.String(),
 				"email":           "foo@example.com",
 			},
 			expected: map[string]interface{}{
@@ -140,8 +119,7 @@ func (ts *ResendTestSuite) TestResendValidation() {
 
 func (ts *ResendTestSuite) TestResendSuccess() {
 	// Create user
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.NewUser("123456789", "foo@example.com", "password", ts.Config.JWT.Aud, nil, id, uuid.Nil)
+	u, err := models.NewUser("123456789", "foo@example.com", "password", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err, "Error creating test user model")
 
 	// Avoid max freq limit error
@@ -157,24 +135,24 @@ func (ts *ResendTestSuite) TestResendSuccess() {
 	u.EmailChange = "bar@example.com"
 	u.EmailChangeSentAt = &now
 	u.EmailChangeTokenNew = "123456"
-	require.NoError(ts.T(), ts.API.db.Create(u, "project_id", "organization_role"), "Error saving new test user")
+	require.NoError(ts.T(), ts.API.db.Create(u, "organization_role"), "Error saving new test user")
 	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.ConfirmationToken, models.ConfirmationToken))
 	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.EmailChange, u.EmailChangeTokenNew, models.EmailChangeTokenNew))
 
-	phoneUser, err := models.NewUser("1234567890", "", "password", ts.Config.JWT.Aud, nil, id, uuid.Nil)
+	phoneUser, err := models.NewUser("1234567890", "", "password", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err, "Error creating test user model")
 	phoneUser.EmailChange = "bar@example.com"
 	phoneUser.EmailChangeSentAt = &now
 	phoneUser.EmailChangeTokenNew = "123456"
-	require.NoError(ts.T(), ts.API.db.Create(phoneUser, "project_id", "organization_role"), "Error saving new test user")
+	require.NoError(ts.T(), ts.API.db.Create(phoneUser, "organization_role"), "Error saving new test user")
 	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, phoneUser.ID, phoneUser.EmailChange, phoneUser.EmailChangeTokenNew, models.EmailChangeTokenNew))
 
-	emailUser, err := models.NewUser("", "bar@example.com", "password", ts.Config.JWT.Aud, nil, id, uuid.Nil)
+	emailUser, err := models.NewUser("", "bar@example.com", "password", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err, "Error creating test user model")
 	phoneUser.PhoneChange = "1234567890"
 	phoneUser.PhoneChangeSentAt = &now
 	phoneUser.PhoneChangeToken = "123456"
-	require.NoError(ts.T(), ts.API.db.Create(emailUser, "project_id", "organization_role"), "Error saving new test user")
+	require.NoError(ts.T(), ts.API.db.Create(emailUser, "organization_role"), "Error saving new test user")
 	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, phoneUser.ID, phoneUser.PhoneChange, phoneUser.PhoneChangeToken, models.PhoneChangeToken))
 
 	cases := []struct {
@@ -188,7 +166,7 @@ func (ts *ResendTestSuite) TestResendSuccess() {
 			params: map[string]interface{}{
 				"type":            "signup",
 				"email":           u.GetEmail(),
-				"organization_id": id,
+				"organization_id": ts.OrganizationID.String(),
 			},
 			user: u,
 		},
@@ -196,7 +174,7 @@ func (ts *ResendTestSuite) TestResendSuccess() {
 			desc: "Resend email change",
 			params: map[string]interface{}{
 				"type":            "email_change",
-				"organization_id": id,
+				"organization_id": ts.OrganizationID.String(),
 				"email":           u.GetEmail(),
 			},
 			user: u,
@@ -205,7 +183,7 @@ func (ts *ResendTestSuite) TestResendSuccess() {
 			desc: "Resend email change for phone user",
 			params: map[string]interface{}{
 				"type":            "email_change",
-				"organization_id": id,
+				"organization_id": ts.OrganizationID.String(),
 				"phone":           phoneUser.GetPhone(),
 			},
 			user: phoneUser,
@@ -214,7 +192,7 @@ func (ts *ResendTestSuite) TestResendSuccess() {
 			desc: "Resend phone change for email user",
 			params: map[string]interface{}{
 				"type":            "phone_change",
-				"organization_id": id,
+				"organization_id": ts.OrganizationID.String(),
 				"email":           emailUser.GetEmail(),
 			},
 			user: emailUser,

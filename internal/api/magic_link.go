@@ -23,6 +23,7 @@ type MagicLinkParams struct {
 	CodeChallengeMethod string                 `json:"code_challenge_method"`
 	CodeChallenge       string                 `json:"code_challenge"`
 	OrganizationID      uuid.UUID              `json:"organization_id"`
+	ProjectID           uuid.UUID              `json:"project_id"`
 }
 
 func (p *MagicLinkParams) Validate(a *API) error {
@@ -73,7 +74,7 @@ func (a *API) MagicLink(w http.ResponseWriter, r *http.Request) error {
 
 	var isNewUser bool
 	aud := a.requestAud(ctx, r)
-	user, err := models.FindUserByEmailAndAudience(db, params.Email, aud, params.OrganizationID, uuid.Nil)
+	user, err := models.FindUserByEmailAndAudience(db, params.Email, aud, params.OrganizationID, params.ProjectID)
 	if err != nil {
 		if models.IsNotFoundError(err) {
 			isNewUser = true
@@ -96,6 +97,7 @@ func (a *API) MagicLink(w http.ResponseWriter, r *http.Request) error {
 			CodeChallengeMethod: params.CodeChallengeMethod,
 			CodeChallenge:       params.CodeChallenge,
 			OrganizationID:      params.OrganizationID,
+			ProjectID:           params.ProjectID,
 		}
 		newBodyContent, err := json.Marshal(signUpParams)
 		if err != nil {
@@ -117,6 +119,7 @@ func (a *API) MagicLink(w http.ResponseWriter, r *http.Request) error {
 				CodeChallengeMethod: params.CodeChallengeMethod,
 				CodeChallenge:       params.CodeChallenge,
 				OrganizationID:      params.OrganizationID,
+				ProjectID:           params.ProjectID,
 			}
 			metadata, err := json.Marshal(newBodyContent)
 			if err != nil {
@@ -135,7 +138,7 @@ func (a *API) MagicLink(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if isPKCEFlow(flowType) {
-		if _, err = generateFlowState(db, models.MagicLink.String(), models.MagicLink, params.CodeChallengeMethod, params.CodeChallenge, &user.ID, params.OrganizationID, uuid.Nil); err != nil {
+		if _, err = generateFlowState(db, models.MagicLink.String(), models.MagicLink, params.CodeChallengeMethod, params.CodeChallenge, &user.ID, params.OrganizationID, params.ProjectID); err != nil {
 			return err
 		}
 	}

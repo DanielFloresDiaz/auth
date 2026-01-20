@@ -74,7 +74,7 @@ type User struct {
 	DONTUSEINSTANCEID uuid.UUID `json:"-" db:"instance_id"`
 
 	OrganizationID   uuid.NullUUID `json:"organization_id" db:"organization_id"`
-	ProjectID        uuid.NullUUID `json:"project_id" db:"project_id"`
+	ProjectID        uuid.UUID     `json:"project_id" db:"project_id"`
 	OrganizationRole string        `json:"organization_role" db:"organization_role"`
 }
 
@@ -111,7 +111,7 @@ func NewUserWithPasswordHash(phone, email, passwordHash string, aud string, user
 		UserMetaData:      userData,
 		EncryptedPassword: &passwordHash,
 		OrganizationID:    uuid.NullUUID{UUID: organization_id, Valid: organization_id != uuid.Nil},
-		ProjectID:         uuid.NullUUID{UUID: project_id, Valid: project_id != uuid.Nil},
+		ProjectID:         project_id,
 		OrganizationRole:  "client",
 	}
 	return user, nil
@@ -147,7 +147,7 @@ func NewUser(phone, email, password string, aud string, userData map[string]inte
 		UserMetaData:      userData,
 		EncryptedPassword: &passwordHash,
 		OrganizationID:    uuid.NullUUID{UUID: organization_id, Valid: organization_id != uuid.Nil},
-		ProjectID:         uuid.NullUUID{UUID: project_id, Valid: project_id != uuid.Nil},
+		ProjectID:         project_id,
 		OrganizationRole:  "client",
 	}
 	return user, nil
@@ -531,7 +531,7 @@ func (u *User) ConfirmEmailChange(tx *storage.Connection, status int) error {
 		}
 	}
 
-	identity, err := FindIdentityByIdAndProvider(tx, u.ID.String(), "email", u.OrganizationID.UUID, u.ProjectID.UUID)
+	identity, err := FindIdentityByIdAndProvider(tx, u.ID.String(), "email", u.OrganizationID.UUID, u.ProjectID)
 	if err != nil {
 		if IsNotFoundError(err) {
 			// no email identity, not an error
@@ -574,7 +574,7 @@ func (u *User) ConfirmPhoneChange(tx *storage.Connection) error {
 		return err
 	}
 
-	identity, err := FindIdentityByIdAndProvider(tx, u.ID.String(), "phone", u.OrganizationID.UUID, u.ProjectID.UUID)
+	identity, err := FindIdentityByIdAndProvider(tx, u.ID.String(), "phone", u.OrganizationID.UUID, u.ProjectID)
 	if err != nil {
 		if IsNotFoundError(err) {
 			// no phone identity, not an error

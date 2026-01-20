@@ -579,7 +579,7 @@ func (s *Service) GenerateAccessToken(r *http.Request, tx *storage.Connection, p
 
 	organization_id := params.User.OrganizationID.UUID
 	organization_role := params.User.OrganizationRole
-	project_id := params.User.ProjectID.UUID
+	project_id := params.User.ProjectID
 
 	tier_model, tier_time, tier_usage, terr := models.FindTiersByOrganizationIDAndOrganizationRole(tx, organization_id, organization_role)
 	if terr != nil {

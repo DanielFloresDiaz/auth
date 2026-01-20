@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,8 +19,10 @@ import (
 
 type RecoverTestSuite struct {
 	suite.Suite
-	API    *API
-	Config *conf.GlobalConfiguration
+	API            *API
+	Config         *conf.GlobalConfiguration
+	OrganizationID uuid.UUID
+	ProjectID      uuid.UUID
 }
 
 func TestRecover(t *testing.T) {
@@ -38,39 +39,17 @@ func TestRecover(t *testing.T) {
 }
 
 func (ts *RecoverTestSuite) SetupTest() {
-	models.TruncateAll(ts.API.db)
-
-	project_id := uuid.Must(uuid.NewV4())
-	// Create a project
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Create the admin of the organization
-	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
-	require.NoError(ts.T(), err, "Error making new user")
-	require.NoError(ts.T(), ts.API.db.Create(user, "organization_id", "organization_role"), "Error creating user")
-
-	// Create the organization
-	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Set the user as the admin of the organization
-	if err := ts.API.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
+	// Initialize the database with project, organization, and admin user
+	ts.ProjectID, ts.OrganizationID, _ = InitializeTestDatabase(ts.T(), ts.API, ts.Config)
 
 	// Create user
-	u, err := models.NewUser("", "test@example.com", "password", ts.Config.JWT.Aud, nil, organization_id, uuid.Nil)
+	u, err := models.NewUser("", "test@example.com", "password", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err, "Error creating test user model")
-	require.NoError(ts.T(), ts.API.db.Create(u, "project_id", "organization_role"), "Error saving new test user")
+	require.NoError(ts.T(), ts.API.db.Create(u, "organization_role"), "Error saving new test user")
 }
 
 func (ts *RecoverTestSuite) TestRecover_FirstRecovery() {
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, uuid.Nil)
 	require.NoError(ts.T(), err)
 	u.RecoverySentAt = &time.Time{}
 	require.NoError(ts.T(), ts.API.db.Update(u))
@@ -79,7 +58,8 @@ func (ts *RecoverTestSuite) TestRecover_FirstRecovery() {
 	var buffer bytes.Buffer
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
 		"email":           "test@example.com",
-		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+		"organization_id": ts.OrganizationID.String(),
+		"project_id":      ts.ProjectID.String(),
 	}))
 
 	// Setup request
@@ -91,7 +71,7 @@ func (ts *RecoverTestSuite) TestRecover_FirstRecovery() {
 	ts.API.handler.ServeHTTP(w, req)
 	assert.Equal(ts.T(), http.StatusOK, w.Code)
 
-	u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, uuid.Nil)
 	require.NoError(ts.T(), err)
 
 	assert.WithinDuration(ts.T(), time.Now(), *u.RecoverySentAt, 1*time.Second)
@@ -99,8 +79,7 @@ func (ts *RecoverTestSuite) TestRecover_FirstRecovery() {
 
 func (ts *RecoverTestSuite) TestRecover_NoEmailSent() {
 	recoveryTime := time.Now().UTC().Add(-59 * time.Second)
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 	u.RecoverySentAt = &recoveryTime
 	require.NoError(ts.T(), ts.API.db.Update(u))
@@ -109,7 +88,8 @@ func (ts *RecoverTestSuite) TestRecover_NoEmailSent() {
 	var buffer bytes.Buffer
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
 		"email":           "test@example.com",
-		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+		"organization_id": ts.OrganizationID.String(),
+		"project_id":      ts.ProjectID.String(),
 	}))
 
 	// Setup request
@@ -121,7 +101,7 @@ func (ts *RecoverTestSuite) TestRecover_NoEmailSent() {
 	ts.API.handler.ServeHTTP(w, req)
 	assert.Equal(ts.T(), http.StatusTooManyRequests, w.Code)
 
-	u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 
 	// ensure it did not send a new email
@@ -132,8 +112,7 @@ func (ts *RecoverTestSuite) TestRecover_NoEmailSent() {
 
 func (ts *RecoverTestSuite) TestRecover_NewEmailSent() {
 	recoveryTime := time.Now().UTC().Add(-20 * time.Minute)
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 	u.RecoverySentAt = &recoveryTime
 	require.NoError(ts.T(), ts.API.db.Update(u))
@@ -142,7 +121,8 @@ func (ts *RecoverTestSuite) TestRecover_NewEmailSent() {
 	var buffer bytes.Buffer
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
 		"email":           "test@example.com",
-		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+		"organization_id": ts.OrganizationID.String(),
+		"project_id":      ts.ProjectID.String(),
 	}))
 
 	// Setup request
@@ -154,7 +134,7 @@ func (ts *RecoverTestSuite) TestRecover_NewEmailSent() {
 	ts.API.handler.ServeHTTP(w, req)
 	assert.Equal(ts.T(), http.StatusOK, w.Code)
 
-	u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 
 	// ensure it sent a new email
@@ -163,15 +143,15 @@ func (ts *RecoverTestSuite) TestRecover_NewEmailSent() {
 
 func (ts *RecoverTestSuite) TestRecover_NoSideChannelLeak() {
 	email := "doesntexist@example.com"
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	_, err := models.FindUserByEmailAndAudience(ts.API.db, email, ts.Config.JWT.Aud, id, uuid.Nil)
+	_, err := models.FindUserByEmailAndAudience(ts.API.db, email, ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	require.True(ts.T(), models.IsNotFoundError(err), "User with email %s does exist", email)
 
 	// Request body
 	var buffer bytes.Buffer
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
 		"email":           email,
-		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+		"organization_id": ts.OrganizationID.String(),
+		"project_id":      ts.ProjectID.String(),
 	}))
 
 	// Setup request

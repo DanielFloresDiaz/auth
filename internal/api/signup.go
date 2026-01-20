@@ -101,7 +101,7 @@ func (params *SignupParams) ToUserModel(isSSOUser bool) (user *models.User, err 
 	}
 
 	user.Identities = make([]models.Identity, 0)
-	user.ProjectID = uuid.NullUUID{UUID: params.ProjectID, Valid: params.ProjectID != uuid.Nil}
+	user.ProjectID = params.ProjectID
 
 	if params.Provider != "anonymous" {
 		// TODO: Deprecate "provider" field
@@ -210,16 +210,13 @@ func (a *API) Signup(w http.ResponseWriter, r *http.Request) error {
 			if signupUser.OrganizationID.UUID == uuid.Nil {
 				excludeColumns = append(excludeColumns, "organization_id")
 			}
-			if signupUser.ProjectID.UUID == uuid.Nil {
-				excludeColumns = append(excludeColumns, "project_id")
-			}
 
 			user, terr = a.signupNewUser(tx, signupUser, excludeColumns...)
 			if terr != nil {
 				return terr
 			}
 		}
-		identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), params.Provider, user.OrganizationID.UUID, user.ProjectID.UUID)
+		identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), params.Provider, user.OrganizationID.UUID, user.ProjectID)
 		if terr != nil {
 			if !models.IsNotFoundError(terr) {
 				return terr
@@ -378,7 +375,7 @@ func sanitizeUser(u *models.User, params *SignupParams) (*models.User, error) {
 	u.UserMetaData = params.Data
 	u.Aud = params.Aud
 	u.OrganizationID = uuid.NullUUID{}
-	u.ProjectID = uuid.NullUUID{}
+	u.ProjectID = uuid.Nil
 
 	// sanitize app_metadata
 	u.AppMetaData = map[string]interface{}{

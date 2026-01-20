@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,8 +16,10 @@ import (
 
 type ExternalTestSuite struct {
 	suite.Suite
-	API    *API
-	Config *conf.GlobalConfiguration
+	API            *API
+	Config         *conf.GlobalConfiguration
+	ProjectID      uuid.UUID
+	OrganizationID uuid.UUID
 }
 
 func TestExternal(t *testing.T) {
@@ -38,35 +39,13 @@ func (ts *ExternalTestSuite) SetupTest() {
 	ts.Config.DisableSignup = false
 	ts.Config.Mailer.Autoconfirm = false
 
-	models.TruncateAll(ts.API.db)
-
-	project_id := uuid.Must(uuid.NewV4())
-	// Create a project
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Create the admin of the organization
-	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
-	require.NoError(ts.T(), err, "Error making new user")
-	require.NoError(ts.T(), ts.API.db.Create(user, "organization_id", "organization_role"), "Error creating user")
-
-	// Create the organization if it doesn't exist
-	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Set the user as the admin of the organization
-	if err := ts.API.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
+	// Initialize the database with project, organization, and admin user
+	ts.ProjectID, ts.OrganizationID, _ = InitializeTestDatabase(ts.T(), ts.API, ts.Config)
 }
 
 func (ts *ExternalTestSuite) createUser(providerId string, email string, name string, avatar string, confirmationToken string) (*models.User, error) {
 	// Cleanup existing user, if they already exist
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	if u, _ := models.FindUserByEmailAndAudience(ts.API.db, email, ts.Config.JWT.Aud, id, uuid.Nil); u != nil {
+	if u, _ := models.FindUserByEmailAndAudience(ts.API.db, email, ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID); u != nil {
 		require.NoError(ts.T(), ts.API.db.Destroy(u), "Error deleting user")
 	}
 
@@ -74,13 +53,13 @@ func (ts *ExternalTestSuite) createUser(providerId string, email string, name st
 	if avatar != "" {
 		userData["avatar_url"] = avatar
 	}
-	u, err := models.NewUser("", email, "test", ts.Config.JWT.Aud, userData, id, uuid.Nil)
+	u, err := models.NewUser("", email, "test", ts.Config.JWT.Aud, userData, ts.OrganizationID, ts.ProjectID)
 
 	if confirmationToken != "" {
 		u.ConfirmationToken = confirmationToken
 	}
 	ts.Require().NoError(err, "Error making new user")
-	ts.Require().NoError(ts.API.db.Create(u, "project_id", "organization_role"), "Error creating user")
+	ts.Require().NoError(ts.API.db.Create(u, "organization_role"), "Error creating user")
 
 	if confirmationToken != "" {
 		ts.Require().NoError(models.CreateOneTimeToken(ts.API.db, u.ID, email, u.ConfirmationToken, models.ConfirmationToken), "Error creating one-time confirmation/invite token")
@@ -90,9 +69,10 @@ func (ts *ExternalTestSuite) createUser(providerId string, email string, name st
 		"sub":             u.ID.String(),
 		"email":           email,
 		"organization_id": u.OrganizationID,
+		"project_id":      u.ProjectID,
 	})
 	ts.Require().NoError(err)
-	ts.Require().NoError(ts.API.db.Create(i, "project_id"), "Error creating identity")
+	ts.Require().NoError(ts.API.db.Create(i), "Error creating identity")
 
 	return u, err
 }
@@ -142,8 +122,7 @@ func performAuthorizationRequest(ts *ExternalTestSuite, provider string, inviteT
 	if inviteToken != "" {
 		authorizeURL = authorizeURL + "&invite_token=" + inviteToken
 	}
-	organization_id := "123e4567-e89b-12d3-a456-426655440000"
-	authorizeURL = authorizeURL + "&organization_id=" + organization_id
+	authorizeURL = authorizeURL + "&organization_id=" + ts.OrganizationID.String() + "&project_id=" + ts.ProjectID.String()
 
 	req := httptest.NewRequest(http.MethodGet, authorizeURL, nil)
 	req.Header.Set("Referer", "https://example.netlify.com/admin")
@@ -159,8 +138,7 @@ func performPKCEAuthorizationRequest(ts *ExternalTestSuite, provider, codeChalle
 		authorizeURL = authorizeURL + "&code_challenge=" + codeChallenge + "&code_challenge_method=" + codeChallengeMethod
 	}
 
-	organization_id := "123e4567-e89b-12d3-a456-426655440000"
-	authorizeURL = authorizeURL + "&organization_id=" + organization_id
+	authorizeURL = authorizeURL + "&organization_id=" + ts.OrganizationID.String() + "&project_id=" + ts.ProjectID.String()
 
 	req := httptest.NewRequest(http.MethodGet, authorizeURL, nil)
 	req.Header.Set("Referer", "https://example.supabase.com/admin")
@@ -241,10 +219,9 @@ func assertAuthorizationSuccess(ts *ExternalTestSuite, u *url.URL, tokenCount in
 	}
 
 	// ensure user has been created with metadata
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
 	var user *models.User
 	if email != "" {
-		user, err = models.FindUserByEmailAndAudience(ts.API.db, email, ts.Config.JWT.Aud, id, uuid.Nil)
+		user, err = models.FindUserByEmailAndAudience(ts.API.db, email, ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	} else {
 		identity := &models.Identity{}
 		err = ts.API.db.Q().Where("provider_id = ?", providerId).First(identity)
@@ -278,8 +255,7 @@ func assertAuthorizationFailure(ts *ExternalTestSuite, u *url.URL, errorDescript
 	ts.Empty(v.Get("token_type"))
 
 	// ensure user is nil
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	user, err := models.FindUserByEmailAndAudience(ts.API.db, email, ts.Config.JWT.Aud, id, uuid.Nil)
+	user, err := models.FindUserByEmailAndAudience(ts.API.db, email, ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	ts.Require().Error(err, "User not found")
 	ts.Require().Nil(user)
 }

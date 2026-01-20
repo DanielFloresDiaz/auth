@@ -46,36 +46,12 @@ func TestUser(t *testing.T) {
 }
 
 func (ts *UserTestSuite) SetupTest() {
-	models.TruncateAll(ts.API.db)
-
-	project_id := uuid.Must(uuid.NewV4())
-	ts.ProjectID = project_id
-	// Create a project
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Create the admin of the organization
-	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
-	require.NoError(ts.T(), err, "Error making new user")
-	require.NoError(ts.T(), ts.API.db.Create(user, "organization_id", "organization_role"), "Error creating user")
-
-	// Create the organization
-	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	ts.OrganizationID = organization_id
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Set the user as the admin of the organization
-	if err := ts.API.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
+	ts.ProjectID, ts.OrganizationID, _ = InitializeTestDatabase(ts.T(), ts.API, ts.Config)
 
 	// Create user
-	u, err := models.NewUser("123456789", "test@example.com", "password", ts.Config.JWT.Aud, nil, organization_id, uuid.Nil)
+	u, err := models.NewUser("123456789", "test@example.com", "password", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err, "Error creating test user model")
-	require.NoError(ts.T(), ts.API.db.Create(u, "project_id", "organization_role"), "Error saving new test user")
+	require.NoError(ts.T(), ts.API.db.Create(u, "organization_role"), "Error saving new test user")
 }
 
 func (ts *UserTestSuite) generateToken(user *models.User, sessionId *uuid.UUID) string {
@@ -97,8 +73,7 @@ func (ts *UserTestSuite) generateAccessTokenAndSession(user *models.User) string
 }
 
 func (ts *UserTestSuite) TestUserGet() {
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err, "Error finding user")
 	token := ts.generateAccessTokenAndSession(u)
 
@@ -191,15 +166,14 @@ func (ts *UserTestSuite) TestUserUpdateEmail() {
 
 	for _, c := range cases {
 		ts.Run(c.desc, func() {
-			id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-			u, err := models.NewUser("", "", "", ts.Config.JWT.Aud, nil, id, uuid.Nil)
+			u, err := models.NewUser("", "", "", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
 			require.NoError(ts.T(), err, "Error creating test user model")
 			require.NoError(ts.T(), u.SetEmail(ts.API.db, c.userData["email"].(string)), "Error setting user email")
 			require.NoError(ts.T(), u.SetPhone(ts.API.db, c.userData["phone"].(string)), "Error setting user phone")
 			if isAnonymous, ok := c.userData["is_anonymous"]; ok {
 				u.IsAnonymous = isAnonymous.(bool)
 			}
-			require.NoError(ts.T(), ts.API.db.Create(u, "project_id", "organization_role"), "Error saving test user")
+			require.NoError(ts.T(), ts.API.db.Create(u, "organization_role"), "Error saving test user")
 
 			token := ts.generateAccessTokenAndSession(u)
 
@@ -239,13 +213,12 @@ func (ts *UserTestSuite) TestUserUpdateEmail() {
 
 }
 func (ts *UserTestSuite) TestUserUpdatePhoneAutoconfirmEnabled() {
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 
-	existingUser, err := models.NewUser("22222222", "", "", ts.Config.JWT.Aud, nil, id, uuid.Nil)
+	existingUser, err := models.NewUser("22222222", "", "", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
-	require.NoError(ts.T(), ts.API.db.Create(existingUser, "project_id", "organization_role"), "Error saving new test user")
+	require.NoError(ts.T(), ts.API.db.Create(existingUser, "organization_role"), "Error saving new test user")
 
 	cases := []struct {
 		desc         string
@@ -307,8 +280,7 @@ func (ts *UserTestSuite) TestUserUpdatePhoneAutoconfirmEnabled() {
 }
 
 func (ts *UserTestSuite) TestUserUpdatePassword() {
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 
 	r, err := models.GrantAuthenticatedUser(ts.API.db, u, models.GrantParams{})
@@ -397,7 +369,7 @@ func (ts *UserTestSuite) TestUserUpdatePassword() {
 			require.Equal(ts.T(), c.expected.code, w.Code)
 
 			// Request body
-			u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+			u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 			require.NoError(ts.T(), err)
 
 			isAuthenticated, _, err := u.Authenticate(context.Background(), ts.API.db, c.newPassword, ts.API.config.Security.DBEncryption.DecryptionKeys, ts.API.config.Security.DBEncryption.Encrypt, ts.API.config.Security.DBEncryption.EncryptionKeyID)
@@ -409,8 +381,7 @@ func (ts *UserTestSuite) TestUserUpdatePassword() {
 }
 
 func (ts *UserTestSuite) TestUserUpdatePasswordNoReauthenticationRequired() {
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 
 	type expected struct {
@@ -464,7 +435,7 @@ func (ts *UserTestSuite) TestUserUpdatePasswordNoReauthenticationRequired() {
 			require.Equal(ts.T(), c.expected.code, w.Code)
 
 			// Request body
-			u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+			u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 			require.NoError(ts.T(), err)
 
 			isAuthenticated, _, err := u.Authenticate(context.Background(), ts.API.db, c.newPassword, ts.API.config.Security.DBEncryption.DecryptionKeys, ts.API.config.Security.DBEncryption.Encrypt, ts.API.config.Security.DBEncryption.EncryptionKeyID)
@@ -477,8 +448,7 @@ func (ts *UserTestSuite) TestUserUpdatePasswordNoReauthenticationRequired() {
 
 func (ts *UserTestSuite) TestUserUpdatePasswordReauthentication() {
 	ts.Config.Security.UpdatePasswordRequireReauthentication = true
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 
 	// Confirm the test user
@@ -496,7 +466,7 @@ func (ts *UserTestSuite) TestUserUpdatePasswordReauthentication() {
 	ts.API.handler.ServeHTTP(w, req)
 	require.Equal(ts.T(), w.Code, http.StatusOK)
 
-	u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 	require.NotEmpty(ts.T(), u.ReauthenticationToken)
 	require.NotEmpty(ts.T(), u.ReauthenticationSentAt)
@@ -523,7 +493,7 @@ func (ts *UserTestSuite) TestUserUpdatePasswordReauthentication() {
 	require.Equal(ts.T(), w.Code, http.StatusOK)
 
 	// Request body
-	u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 
 	isAuthenticated, _, err := u.Authenticate(context.Background(), ts.API.db, "newpass", ts.Config.Security.DBEncryption.DecryptionKeys, ts.Config.Security.DBEncryption.Encrypt, ts.Config.Security.DBEncryption.EncryptionKeyID)
@@ -536,8 +506,7 @@ func (ts *UserTestSuite) TestUserUpdatePasswordReauthentication() {
 
 func (ts *UserTestSuite) TestUserUpdatePasswordLogoutOtherSessions() {
 	ts.Config.Security.UpdatePasswordRequireReauthentication = false
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 
 	// Confirm the test user

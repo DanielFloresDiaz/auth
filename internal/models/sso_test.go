@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/gobuffalo/pop/v6"
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -16,11 +17,30 @@ import (
 type SSOTestSuite struct {
 	suite.Suite
 
-	db *storage.Connection
+	db     *storage.Connection
+	config *conf.GlobalConfiguration
 }
 
 func (ts *SSOTestSuite) SetupTest() {
-	TruncateAll(ts.db)
+	// Connect as the postgres superuser to truncate tables
+	superuserURL := ts.config.DB.URL
+	if u, err := url.Parse(ts.config.DB.URL); err == nil {
+		u.User = url.UserPassword("postgres", "root")
+		superuserURL = u.String()
+	}
+
+	superuserDeets := &pop.ConnectionDetails{
+		Dialect: ts.config.DB.Driver,
+		URL:     superuserURL,
+	}
+
+	superuserDB, err := pop.NewConnection(superuserDeets)
+	require.NoError(ts.T(), err, "Should be able to connect as postgres superuser")
+	require.NoError(ts.T(), superuserDB.Open())
+	defer superuserDB.Close()
+
+	setup_db := &storage.Connection{Connection: superuserDB}
+	TruncateAll(setup_db)
 }
 
 func TestSSO(t *testing.T) {
@@ -31,7 +51,8 @@ func TestSSO(t *testing.T) {
 	require.NoError(t, err)
 
 	ts := &SSOTestSuite{
-		db: conn,
+		db:     conn,
+		config: globalConfig,
 	}
 	defer ts.db.Close()
 

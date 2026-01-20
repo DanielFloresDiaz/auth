@@ -20,8 +20,10 @@ import (
 
 type AnonymousTestSuite struct {
 	suite.Suite
-	API    *API
-	Config *conf.GlobalConfiguration
+	API            *API
+	Config         *conf.GlobalConfiguration
+	OrganizationID uuid.UUID
+	ProjectID      uuid.UUID
 }
 
 func TestAnonymous(t *testing.T) {
@@ -38,39 +40,19 @@ func TestAnonymous(t *testing.T) {
 }
 
 func (ts *AnonymousTestSuite) SetupTest() {
-	models.TruncateAll(ts.API.db)
-
-	project_id := uuid.Must(uuid.NewV4())
-	// Create a project
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Create the admin of the organization
-	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
-	require.NoError(ts.T(), err, "Error making new user")
-	require.NoError(ts.T(), ts.API.db.Create(user, "organization_id", "organization_role"), "Error creating user")
-
-	// Create the organization
-	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Set the user as the admin of the organization
-	if err := ts.API.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
+	// Initialize the database with project, organization, and admin user
+	ts.ProjectID, ts.OrganizationID, _ = InitializeTestDatabase(ts.T(), ts.API, ts.Config)
 
 	// Create anonymous user
 	params := &SignupParams{
 		Aud:            ts.Config.JWT.Aud,
 		Provider:       "anonymous",
-		OrganizationID: organization_id,
+		OrganizationID: ts.OrganizationID,
+		ProjectID:      ts.ProjectID,
 	}
 	u, err := params.ToUserModel(false)
 	require.NoError(ts.T(), err, "Error creating test user model")
-	require.NoError(ts.T(), ts.API.db.Create(u, "project_id", "organization_role"), "Error saving new anonymous test user")
+	require.NoError(ts.T(), ts.API.db.Create(u, "organization_role"), "Error saving new anonymous test user")
 }
 
 func (ts *AnonymousTestSuite) TestAnonymousLogins() {
@@ -81,7 +63,8 @@ func (ts *AnonymousTestSuite) TestAnonymousLogins() {
 		"data": map[string]interface{}{
 			"field": "foo",
 		},
-		"organization_id": uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+		"organization_id": ts.OrganizationID,
+		"project_id":      ts.ProjectID,
 	}))
 
 	req := httptest.NewRequest(http.MethodPost, "/signup", &buffer)
@@ -120,7 +103,8 @@ func (ts *AnonymousTestSuite) TestConvertAnonymousUserToPermanent() {
 			desc: "convert anonymous user to permanent user with email",
 			body: map[string]interface{}{
 				"email":           "test@example.com",
-				"organization_id": uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				"organization_id": ts.OrganizationID,
+				"project_id":      ts.ProjectID,
 			},
 			verificationType: "email_change",
 		},
@@ -128,7 +112,8 @@ func (ts *AnonymousTestSuite) TestConvertAnonymousUserToPermanent() {
 			desc: "convert anonymous user to permanent user with phone",
 			body: map[string]interface{}{
 				"phone":           "1234567890",
-				"organization_id": uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				"organization_id": ts.OrganizationID,
+				"project_id":      ts.ProjectID,
 			},
 			verificationType: "phone_change",
 		},
@@ -137,7 +122,8 @@ func (ts *AnonymousTestSuite) TestConvertAnonymousUserToPermanent() {
 			body: map[string]interface{}{
 				"email":           "test2@example.com",
 				"password":        "test-password",
-				"organization_id": uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				"organization_id": ts.OrganizationID,
+				"project_id":      ts.ProjectID,
 			},
 			verificationType: "email_change",
 		},
@@ -146,7 +132,8 @@ func (ts *AnonymousTestSuite) TestConvertAnonymousUserToPermanent() {
 			body: map[string]interface{}{
 				"phone":           "1234560000",
 				"password":        "test-password",
-				"organization_id": uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				"organization_id": ts.OrganizationID,
+				"project_id":      ts.ProjectID,
 			},
 			verificationType: "phone_change",
 		},
@@ -157,7 +144,8 @@ func (ts *AnonymousTestSuite) TestConvertAnonymousUserToPermanent() {
 			// Request body
 			var buffer bytes.Buffer
 			require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
-				"organization_id": uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				"organization_id": ts.OrganizationID,
+				"project_id":      ts.ProjectID,
 			}))
 
 			req := httptest.NewRequest(http.MethodPost, "/signup", &buffer)
@@ -248,7 +236,8 @@ func (ts *AnonymousTestSuite) TestRateLimitAnonymousSignups() {
 	// It rate limits after 30 requests
 	for i := 0; i < int(ts.Config.RateLimitAnonymousUsers); i++ {
 		require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
-			"organization_id": uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+			"organization_id": ts.OrganizationID,
+			"project_id":      ts.ProjectID,
 		}))
 		req := httptest.NewRequest(http.MethodPost, "http://localhost/signup", &buffer)
 		req.Header.Set("Content-Type", "application/json")
@@ -287,16 +276,15 @@ func (ts *AnonymousTestSuite) TestAdminUpdateAnonymousUser() {
 	adminJwt, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(ts.Config.JWT.Secret))
 	require.NoError(ts.T(), err)
 
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u1, err := models.NewUser("", "", "", ts.Config.JWT.Aud, nil, id, uuid.Nil)
+	u1, err := models.NewUser("", "", "", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 	u1.IsAnonymous = true
-	require.NoError(ts.T(), ts.API.db.Create(u1, "project_id", "organization_role"))
+	require.NoError(ts.T(), ts.API.db.Create(u1, "organization_role"))
 
-	u2, err := models.NewUser("", "", "", ts.Config.JWT.Aud, nil, id, uuid.Nil)
+	u2, err := models.NewUser("", "", "", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 	u2.IsAnonymous = true
-	require.NoError(ts.T(), ts.API.db.Create(u2, "project_id", "organization_role"))
+	require.NoError(ts.T(), ts.API.db.Create(u2, "organization_role"))
 
 	cases := []struct {
 		desc               string

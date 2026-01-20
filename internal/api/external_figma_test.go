@@ -19,9 +19,8 @@ import (
 )
 
 func (ts *ExternalTestSuite) TestSignupExternalFigma() {
-	organization_id := "123e4567-e89b-12d3-a456-426655440000"
 	provider := "figma"
-	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s", provider, organization_id)
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s&project_id=%s", provider, ts.OrganizationID.String(), ts.ProjectID.String())
 	req := httptest.NewRequest(http.MethodGet, url_path, nil)
 	w := httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)
@@ -122,8 +121,7 @@ func (ts *ExternalTestSuite) TestSignupExternalFigma_PKCE() {
 			require.NotEmpty(ts.T(), authCode)
 
 			// Check for valid provider access token, mock does not return refresh token
-			id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-			user, err := models.FindUserByEmailAndAudience(ts.API.db, "figma@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+			user, err := models.FindUserByEmailAndAudience(ts.API.db, "figma@example.com", ts.Config.JWT.Aud, ts.OrganizationID, uuid.Nil)
 			require.NoError(ts.T(), err)
 			require.NotEmpty(ts.T(), user)
 			flowState, err := models.FindFlowStateByAuthCode(ts.API.db, authCode)
@@ -259,8 +257,7 @@ func (ts *ExternalTestSuite) TestSignupExternalFigmaErrorWhenUserBanned() {
 	u := performAuthorization(ts, "figma", code, "")
 	assertAuthorizationSuccess(ts, u, tokenCount, userCount, "figma@example.com", "Figma Test", "figma-test-id", "http://example.com/avatar")
 
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	user, err := models.FindUserByEmailAndAudience(ts.API.db, "figma@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	user, err := models.FindUserByEmailAndAudience(ts.API.db, "figma@example.com", ts.Config.JWT.Aud, ts.OrganizationID, uuid.Nil)
 	require.NoError(ts.T(), err)
 	t := time.Now().Add(24 * time.Hour)
 	user.BannedUntil = &t

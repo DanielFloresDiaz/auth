@@ -13,15 +13,13 @@ import (
 
 	"github.com/supabase/auth/internal/models"
 
-	"github.com/gofrs/uuid"
 	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 )
 
 func (ts *ExternalTestSuite) TestSignupExternalFly() {
-	organization_id := "123e4567-e89b-12d3-a456-426655440000"
 	provider := "fly"
-	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s", provider, organization_id)
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s&project_id=%s", provider, ts.OrganizationID.String(), ts.ProjectID.String())
 	req := httptest.NewRequest(http.MethodGet, url_path, nil)
 	w := httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)
@@ -122,8 +120,7 @@ func (ts *ExternalTestSuite) TestSignupExternalFly_PKCE() {
 			require.NotEmpty(ts.T(), authCode)
 
 			// Check for valid provider access token, mock does not return refresh token
-			id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-			user, err := models.FindUserByEmailAndAudience(ts.API.db, "fly@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+			user, err := models.FindUserByEmailAndAudience(ts.API.db, "fly@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 			require.NoError(ts.T(), err)
 			require.NotEmpty(ts.T(), user)
 			flowState, err := models.FindFlowStateByAuthCode(ts.API.db, authCode)
@@ -259,8 +256,7 @@ func (ts *ExternalTestSuite) TestSignupExternalFlyErrorWhenUserBanned() {
 	u := performAuthorization(ts, "fly", code, "")
 	assertAuthorizationSuccess(ts, u, tokenCount, userCount, "fly@example.com", "test_user", "test_user_id", "")
 
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	user, err := models.FindUserByEmailAndAudience(ts.API.db, "fly@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	user, err := models.FindUserByEmailAndAudience(ts.API.db, "fly@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 	t := time.Now().Add(24 * time.Hour)
 	user.BannedUntil = &t

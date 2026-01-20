@@ -27,7 +27,7 @@ type FlowState struct {
 	CreatedAt            time.Time     `json:"created_at" db:"created_at"`
 	UpdatedAt            time.Time     `json:"updated_at" db:"updated_at"`
 	OrganizationID       uuid.NullUUID `json:"organization_id" db:"organization_id"`
-	ProjectID            uuid.NullUUID `json:"project_id" db:"project_id"`
+	ProjectID            uuid.UUID     `json:"project_id" db:"project_id"`
 }
 
 type CodeChallengeMethod int
@@ -91,7 +91,7 @@ func NewFlowState(providerType, codeChallenge string, codeChallengeMethod CodeCh
 		AuthenticationMethod: authenticationMethod.String(),
 		UserID:               userID,
 		OrganizationID:       uuid.NullUUID{UUID: organization_id, Valid: organization_id != uuid.Nil},
-		ProjectID:            uuid.NullUUID{UUID: project_id, Valid: project_id != uuid.Nil},
+		ProjectID:            project_id,
 	}
 	return flowState
 }

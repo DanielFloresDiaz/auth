@@ -26,7 +26,7 @@ type Identity struct {
 	UpdatedAt      time.Time          `json:"updated_at" db:"updated_at"`
 	Email          storage.NullString `json:"email,omitempty" db:"email" rw:"r"`
 	OrganizationID uuid.NullUUID      `json:"organization_id" db:"organization_id"`
-	ProjectID      uuid.NullUUID      `json:"project_id" db:"project_id"`
+	ProjectID      uuid.UUID          `json:"project_id" db:"project_id"`
 }
 
 func (Identity) TableName() string {

@@ -11,15 +11,13 @@ import (
 	"github.com/supabase/auth/internal/api/provider"
 	"github.com/supabase/auth/internal/models"
 
-	"github.com/gofrs/uuid"
 	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 )
 
 func (ts *ExternalTestSuite) TestSignupExternalKakao() {
-	organization_id := "123e4567-e89b-12d3-a456-426655440000"
 	provider := "kakao"
-	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s", provider, organization_id)
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s&project_id=%s", provider, ts.OrganizationID.String(), ts.ProjectID.String())
 	req := httptest.NewRequest(http.MethodGet, url_path, nil)
 	w := httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)
@@ -232,8 +230,7 @@ func (ts *ExternalTestSuite) TestSignupExternalKakaoErrorWhenUserBanned() {
 	u := performAuthorization(ts, "kakao", code, "")
 	assertAuthorizationSuccess(ts, u, tokenCount, userCount, "kakao@example.com", "Kakao Test", "123", "http://example.com/avatar")
 
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	user, err := models.FindUserByEmailAndAudience(ts.API.db, "kakao@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	user, err := models.FindUserByEmailAndAudience(ts.API.db, "kakao@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 	t := time.Now().Add(24 * time.Hour)
 	user.BannedUntil = &t

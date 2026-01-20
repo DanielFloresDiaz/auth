@@ -17,6 +17,7 @@ type InviteParams struct {
 	Email          string                 `json:"email"`
 	Data           map[string]interface{} `json:"data"`
 	OrganizationID uuid.UUID              `json:"organization_id"`
+	ProjectID      uuid.UUID              `json:"project_id"`
 }
 
 // Invite is the endpoint for inviting a new user
@@ -52,6 +53,7 @@ func (a *API) Invite(w http.ResponseWriter, r *http.Request) error {
 			Aud:            aud,
 			Provider:       "email",
 			OrganizationID: params.OrganizationID,
+			ProjectID:      params.ProjectID,
 		}
 
 		// because params above sets no password, this method
@@ -73,14 +75,8 @@ func (a *API) Invite(w http.ResponseWriter, r *http.Request) error {
 				return apierrors.NewUnprocessableEntityError(apierrors.ErrorCodeEmailExists, DuplicateEmailMsg)
 			}
 		} else {
-			var excludeColumns []string
-			excludeColumns = append(excludeColumns, "organization_role")
-			excludeColumns = append(excludeColumns, "project_id")
-			if user.OrganizationID.UUID == uuid.Nil {
-				excludeColumns = append(excludeColumns, "organization_id")
-			}
 
-			user, err = a.signupNewUser(tx, user, excludeColumns...)
+			user, err = a.signupNewUser(tx, user)
 			if err != nil {
 				return err
 			}
@@ -88,7 +84,7 @@ func (a *API) Invite(w http.ResponseWriter, r *http.Request) error {
 				Subject: user.ID.String(),
 				Email:   user.GetEmail(),
 			}),
-				excludeColumns...)
+			)
 			if err != nil {
 				return err
 			}

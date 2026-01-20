@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,8 +18,10 @@ import (
 
 type OtpTestSuite struct {
 	suite.Suite
-	API    *API
-	Config *conf.GlobalConfiguration
+	API            *API
+	Config         *conf.GlobalConfiguration
+	OrganizationID uuid.UUID
+	ProjectID      uuid.UUID
 }
 
 func TestOtp(t *testing.T) {
@@ -37,30 +38,7 @@ func TestOtp(t *testing.T) {
 }
 
 func (ts *OtpTestSuite) SetupTest() {
-	models.TruncateAll(ts.API.db)
-
-	project_id := uuid.Must(uuid.NewV4())
-	// Create a project
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Create the admin of the organization
-	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
-	require.NoError(ts.T(), err, "Error making new user")
-	require.NoError(ts.T(), ts.API.db.Create(user, "organization_id", "organization_role"), "Error creating user")
-
-	// Create the organization if it doesn't exist
-	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Set the user as the admin of the organization
-	if err := ts.API.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
-
+	ts.ProjectID, ts.OrganizationID, _ = InitializeTestDatabase(ts.T(), ts.API, ts.Config)
 }
 
 func (ts *OtpTestSuite) TestOtpPKCE() {
@@ -83,7 +61,8 @@ func (ts *OtpTestSuite) TestOtpPKCE() {
 				CreateUser:          true,
 				CodeChallengeMethod: "s256",
 				CodeChallenge:       testCodeChallenge,
-				OrganizationID:      uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				OrganizationID:      ts.OrganizationID,
+				ProjectID:           ts.ProjectID,
 			},
 			expected: struct {
 				code     int
@@ -99,7 +78,8 @@ func (ts *OtpTestSuite) TestOtpPKCE() {
 				Email:               "test@example.com",
 				CreateUser:          true,
 				CodeChallengeMethod: "s256",
-				OrganizationID:      uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				OrganizationID:      ts.OrganizationID,
+				ProjectID:           ts.ProjectID,
 			},
 			expected: struct {
 				code     int
@@ -119,7 +99,8 @@ func (ts *OtpTestSuite) TestOtpPKCE() {
 				Email:          "test@example.com",
 				CreateUser:     true,
 				CodeChallenge:  testCodeChallenge,
-				OrganizationID: uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				OrganizationID: ts.OrganizationID,
+				ProjectID:      ts.ProjectID,
 			},
 			expected: struct {
 				code     int
@@ -140,7 +121,8 @@ func (ts *OtpTestSuite) TestOtpPKCE() {
 				CreateUser:          true,
 				CodeChallengeMethod: "s256",
 				CodeChallenge:       testCodeChallenge,
-				OrganizationID:      uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				OrganizationID:      ts.OrganizationID,
+				ProjectID:           ts.ProjectID,
 			},
 			expected: struct {
 				code     int
@@ -191,7 +173,8 @@ func (ts *OtpTestSuite) TestOtp() {
 				Data: map[string]interface{}{
 					"somedata": "metadata",
 				},
-				OrganizationID: uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				OrganizationID: ts.OrganizationID,
+				ProjectID:      ts.ProjectID,
 			},
 			expected: struct {
 				code     int
@@ -207,7 +190,8 @@ func (ts *OtpTestSuite) TestOtp() {
 				Email:          "test@example.com",
 				Phone:          "123456789",
 				CreateUser:     true,
-				OrganizationID: uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				OrganizationID: ts.OrganizationID,
+				ProjectID:      ts.ProjectID,
 			},
 			expected: struct {
 				code     int
@@ -227,7 +211,8 @@ func (ts *OtpTestSuite) TestOtp() {
 				Phone:          "123456789",
 				Channel:        "invalidchannel",
 				CreateUser:     true,
-				OrganizationID: uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+				OrganizationID: ts.OrganizationID,
+				ProjectID:      ts.ProjectID,
 			},
 			expected: struct {
 				code     int
@@ -271,7 +256,8 @@ func (ts *OtpTestSuite) TestNoSignupsForOtp() {
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
 		"email":           "newuser@example.com",
 		"create_user":     false,
-		"organization_id": uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+		"organization_id": ts.OrganizationID,
+		"project_id":      ts.ProjectID,
 	}))
 
 	req := httptest.NewRequest(http.MethodPost, "/otp", &buffer)
@@ -300,7 +286,8 @@ func (ts *OtpTestSuite) TestSubsequentOtp() {
 	var buffer bytes.Buffer
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
 		"email":           userEmail,
-		"organization_id": uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+		"organization_id": ts.OrganizationID,
+		"project_id":      ts.ProjectID,
 	}))
 
 	req := httptest.NewRequest(http.MethodPost, "/otp", &buffer)
@@ -311,8 +298,7 @@ func (ts *OtpTestSuite) TestSubsequentOtp() {
 	ts.API.handler.ServeHTTP(w, req)
 
 	require.Equal(ts.T(), http.StatusOK, w.Code)
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	newUser, err := models.FindUserByEmailAndAudience(ts.API.db, userEmail, ts.Config.JWT.Aud, id, uuid.Nil)
+	newUser, err := models.FindUserByEmailAndAudience(ts.API.db, userEmail, ts.Config.JWT.Aud, ts.OrganizationID, uuid.Nil)
 	require.NoError(ts.T(), err)
 	require.NotEmpty(ts.T(), newUser.ConfirmationToken)
 	require.NotEmpty(ts.T(), newUser.ConfirmationSentAt)
@@ -324,7 +310,8 @@ func (ts *OtpTestSuite) TestSubsequentOtp() {
 	// subsequent requests for another magiclink should not create a recovery token
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
 		"email":           userEmail,
-		"organization_id": uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+		"organization_id": ts.OrganizationID,
+		"project_id":      ts.ProjectID,
 	}))
 
 	req = httptest.NewRequest(http.MethodPost, "/otp", &buffer)
@@ -336,7 +323,7 @@ func (ts *OtpTestSuite) TestSubsequentOtp() {
 
 	require.Equal(ts.T(), http.StatusOK, w.Code)
 
-	user, err := models.FindUserByEmailAndAudience(ts.API.db, userEmail, ts.Config.JWT.Aud, id, uuid.Nil)
+	user, err := models.FindUserByEmailAndAudience(ts.API.db, userEmail, ts.Config.JWT.Aud, ts.OrganizationID, uuid.Nil)
 	require.NoError(ts.T(), err)
 	require.NotEmpty(ts.T(), user.ConfirmationToken)
 	require.NotEmpty(ts.T(), user.ConfirmationSentAt)

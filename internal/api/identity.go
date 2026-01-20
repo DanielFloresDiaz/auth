@@ -120,7 +120,7 @@ func (a *API) LinkIdentity(w http.ResponseWriter, r *http.Request) error {
 
 func (a *API) linkIdentityToUser(r *http.Request, ctx context.Context, tx *storage.Connection, userData *provider.UserProvidedData, providerType string) (*models.User, error) {
 	targetUser := getTargetUser(ctx)
-	identity, terr := models.FindIdentityByIdAndProvider(tx, userData.Metadata.Subject, providerType, targetUser.OrganizationID.UUID, targetUser.ProjectID.UUID)
+	identity, terr := models.FindIdentityByIdAndProvider(tx, userData.Metadata.Subject, providerType, targetUser.OrganizationID.UUID, targetUser.ProjectID)
 	if terr != nil {
 		if !models.IsNotFoundError(terr) {
 			return nil, apierrors.NewInternalServerError("Database error finding identity for linking").WithInternalError(terr)

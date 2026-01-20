@@ -29,6 +29,10 @@ func (a *API) SignupAnonymously(w http.ResponseWriter, r *http.Request) error {
 		return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Organization ID is required")
 	}
 
+	if params.ProjectID == uuid.Nil {
+		return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Project ID is required")
+	}
+
 	params.Aud = aud
 	params.Provider = "anonymous"
 
@@ -48,7 +52,6 @@ func (a *API) SignupAnonymously(w http.ResponseWriter, r *http.Request) error {
 		var terr error
 		var excludeColumns []string
 		excludeColumns = append(excludeColumns, "organization_role")
-		excludeColumns = append(excludeColumns, "project_id")
 
 		newUser, terr = a.signupNewUser(tx, newUser, excludeColumns...)
 		if terr != nil {

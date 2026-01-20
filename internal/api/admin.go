@@ -217,7 +217,7 @@ func (a *API) adminUserUpdate(w http.ResponseWriter, r *http.Request) error {
 
 		var identities []models.Identity
 		if params.Email != "" {
-			if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "email", user.OrganizationID.UUID, user.ProjectID.UUID); terr != nil && !models.IsNotFoundError(terr) {
+			if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "email", user.OrganizationID.UUID, user.ProjectID); terr != nil && !models.IsNotFoundError(terr) {
 				return terr
 			} else if identity == nil {
 				// if the user doesn't have an existing email
@@ -253,7 +253,7 @@ func (a *API) adminUserUpdate(w http.ResponseWriter, r *http.Request) error {
 		}
 
 		if params.Phone != "" {
-			if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "phone", user.OrganizationID.UUID, user.ProjectID.UUID); terr != nil && !models.IsNotFoundError(terr) {
+			if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "phone", user.OrganizationID.UUID, user.ProjectID); terr != nil && !models.IsNotFoundError(terr) {
 				return terr
 			} else if identity == nil {
 				// if the user doesn't have an existing phone
@@ -330,6 +330,7 @@ func (a *API) adminUserCreate(w http.ResponseWriter, r *http.Request) error {
 	config := a.config
 
 	adminUser := getAdminUser(ctx)
+	project_id := a.requestProjectID(ctx, r)
 	organization_id := a.requestOrganizationID(ctx, r)
 	params, err := a.getAdminParams(r)
 	if err != nil {
@@ -351,7 +352,7 @@ func (a *API) adminUserCreate(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
-		if user, err := models.IsDuplicatedEmail(db, params.Email, aud, nil, config.Experimental.ProvidersWithOwnLinkingDomain, organization_id, uuid.Nil); err != nil {
+		if user, err := models.IsDuplicatedEmail(db, params.Email, aud, nil, config.Experimental.ProvidersWithOwnLinkingDomain, organization_id, project_id); err != nil {
 			return apierrors.NewInternalServerError("Database error checking email").WithInternalError(err)
 		} else if user != nil {
 			return apierrors.NewUnprocessableEntityError(apierrors.ErrorCodeEmailExists, DuplicateEmailMsg)
@@ -364,7 +365,7 @@ func (a *API) adminUserCreate(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
-		if exists, err := models.IsDuplicatedPhone(db, params.Phone, aud, organization_id, uuid.Nil); err != nil {
+		if exists, err := models.IsDuplicatedPhone(db, params.Phone, aud, organization_id, project_id); err != nil {
 			return apierrors.NewInternalServerError("Database error checking phone").WithInternalError(err)
 		} else if exists {
 			return apierrors.NewUnprocessableEntityError(apierrors.ErrorCodePhoneExists, "Phone number already registered by another user")
@@ -386,9 +387,9 @@ func (a *API) adminUserCreate(w http.ResponseWriter, r *http.Request) error {
 
 	var user *models.User
 	if params.PasswordHash != "" {
-		user, err = models.NewUserWithPasswordHash(params.Phone, params.Email, params.PasswordHash, aud, params.UserMetaData, organization_id, uuid.Nil)
+		user, err = models.NewUserWithPasswordHash(params.Phone, params.Email, params.PasswordHash, aud, params.UserMetaData, organization_id, project_id)
 	} else {
-		user, err = models.NewUser(params.Phone, params.Email, *params.Password, aud, params.UserMetaData, organization_id, uuid.Nil)
+		user, err = models.NewUser(params.Phone, params.Email, *params.Password, aud, params.UserMetaData, organization_id, project_id)
 	}
 
 	if err != nil {
@@ -429,7 +430,8 @@ func (a *API) adminUserCreate(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	err = db.Transaction(func(tx *storage.Connection) error {
-		if terr := tx.Create(user, "project_id", "organization_role"); terr != nil {
+
+		if terr := tx.Create(user, "organization_role"); terr != nil {
 			return terr
 		}
 
@@ -438,7 +440,7 @@ func (a *API) adminUserCreate(w http.ResponseWriter, r *http.Request) error {
 			identity, terr := a.createNewIdentity(tx, user, "email", structs.Map(provider.Claims{
 				Subject: user.ID.String(),
 				Email:   user.GetEmail(),
-			}), "project_id")
+			}))
 
 			if terr != nil {
 				return terr
@@ -450,7 +452,7 @@ func (a *API) adminUserCreate(w http.ResponseWriter, r *http.Request) error {
 			identity, terr := a.createNewIdentity(tx, user, "phone", structs.Map(provider.Claims{
 				Subject: user.ID.String(),
 				Phone:   user.GetPhone(),
-			}), "project_id")
+			}))
 
 			if terr != nil {
 				return terr

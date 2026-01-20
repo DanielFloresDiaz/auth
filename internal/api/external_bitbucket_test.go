@@ -14,9 +14,8 @@ const (
 )
 
 func (ts *ExternalTestSuite) TestSignupExternalBitbucket() {
-	organization_id := "123e4567-e89b-12d3-a456-426655440000"
 	provider := "bitbucket"
-	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s", provider, organization_id)
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s&project_id=%s", provider, ts.OrganizationID.String(), ts.ProjectID.String())
 	req := httptest.NewRequest(http.MethodGet, url_path, nil)
 	w := httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)

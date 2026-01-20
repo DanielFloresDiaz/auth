@@ -21,7 +21,9 @@ type AuditTestSuite struct {
 	API    *API
 	Config *conf.GlobalConfiguration
 
-	token string
+	token          string
+	OrganizationID uuid.UUID
+	ProjectID      uuid.UUID
 }
 
 func TestAudit(t *testing.T) {
@@ -38,41 +40,19 @@ func TestAudit(t *testing.T) {
 }
 
 func (ts *AuditTestSuite) SetupTest() {
-	models.TruncateAll(ts.API.db)
-
-	project_id := uuid.Must(uuid.NewV4())
-	// Create a project
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Create the admin of the organization
-	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
-	require.NoError(ts.T(), err, "Error making new user")
-	require.NoError(ts.T(), ts.API.db.Create(user, "organization_id", "organization_role"), "Error creating user")
-
-	// Create the organization
-	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Set the user as the admin of the organization
-	if err := ts.API.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
+	// Initialize the database with project, organization, and admin user
+	ts.ProjectID, ts.OrganizationID, _ = InitializeTestDatabase(ts.T(), ts.API, ts.Config)
 
 	ts.token = ts.makeSuperAdmin("")
 
 }
 
 func (ts *AuditTestSuite) makeSuperAdmin(email string) string {
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.NewUser("", email, "test", ts.Config.JWT.Aud, map[string]interface{}{"full_name": "Test User"}, id, uuid.Nil)
+	u, err := models.NewUser("", email, "test", ts.Config.JWT.Aud, map[string]interface{}{"full_name": "Test User"}, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err, "Error making new user")
 
 	u.Role = "supabase_admin"
-	require.NoError(ts.T(), ts.API.db.Create(u, "project_id", "organization_role"))
+	require.NoError(ts.T(), ts.API.db.Create(u, "organization_role"))
 
 	session, err := models.NewSession(u.ID, nil)
 	require.NoError(ts.T(), err)
@@ -151,10 +131,9 @@ func (ts *AuditTestSuite) TestAuditFilters() {
 
 func (ts *AuditTestSuite) prepareDeleteEvent() {
 	// DELETE USER
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.NewUser("12345678", "test-delete@example.com", "test", ts.Config.JWT.Aud, nil, id, uuid.Nil)
+	u, err := models.NewUser("12345678", "test-delete@example.com", "test", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err, "Error making new user")
-	require.NoError(ts.T(), ts.API.db.Create(u, "project_id", "organization_role"), "Error creating user")
+	require.NoError(ts.T(), ts.API.db.Create(u, "organization_role"), "Error creating user")
 
 	// Setup request
 	w := httptest.NewRecorder()

@@ -426,7 +426,7 @@ func (a *API) smsVerify(r *http.Request, conn *storage.Connection, user *models.
 			if terr := models.NewAuditLogEntry(config.AuditLog, r, tx, user, models.UserModifiedAction, "", nil); terr != nil {
 				return terr
 			}
-			if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "phone", user.OrganizationID.UUID, user.ProjectID.UUID); terr != nil {
+			if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "phone", user.OrganizationID.UUID, user.ProjectID); terr != nil {
 				if !models.IsNotFoundError(terr) {
 					return terr
 				}
@@ -593,7 +593,7 @@ func (a *API) emailChangeVerify(r *http.Request, conn *storage.Connection, param
 			return terr
 		}
 
-		if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "email", user.OrganizationID.UUID, user.ProjectID.UUID); terr != nil {
+		if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "email", user.OrganizationID.UUID, user.ProjectID); terr != nil {
 			if !models.IsNotFoundError(terr) {
 				return terr
 			}

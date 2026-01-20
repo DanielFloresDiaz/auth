@@ -17,9 +17,8 @@ const (
 
 func (ts *ExternalTestSuite) TestSignupExternalWorkOSWithConnection() {
 	connection := "test_connection_id"
-	organization_id := "123e4567-e89b-12d3-a456-426655440000"
 	provider := "workos"
-	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s&connection=%s", provider, organization_id, connection)
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s&project_id=%s&connection=%s", provider, ts.OrganizationID.String(), ts.ProjectID.String(), connection)
 	req := httptest.NewRequest(http.MethodGet, url_path, nil)
 	w := httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)
@@ -46,9 +45,8 @@ func (ts *ExternalTestSuite) TestSignupExternalWorkOSWithConnection() {
 
 func (ts *ExternalTestSuite) TestSignupExternalWorkOSWithOrganization() {
 	organization := "test_organization_id"
-	organization_id := "123e4567-e89b-12d3-a456-426655440000"
 	provider := "workos"
-	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s&organization=%s", provider, organization_id, organization)
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s&project_id=%s&organization=%s", provider, ts.OrganizationID.String(), ts.ProjectID.String(), organization)
 	req := httptest.NewRequest(http.MethodGet, url_path, nil)
 	w := httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)
@@ -75,9 +73,8 @@ func (ts *ExternalTestSuite) TestSignupExternalWorkOSWithOrganization() {
 
 func (ts *ExternalTestSuite) TestSignupExternalWorkOSWithProvider() {
 	workos_provider := "test_provider"
-	organization_id := "123e4567-e89b-12d3-a456-426655440000"
 	provider := "workos"
-	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s&workos_provider=%s", provider, organization_id, workos_provider)
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s&project_id=%s&workos_provider=%s", provider, ts.OrganizationID.String(), ts.ProjectID.String(), workos_provider)
 	req := httptest.NewRequest(http.MethodGet, url_path, nil)
 	w := httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)

@@ -2,7 +2,6 @@ package models
 
 import (
 	"encoding/base64"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -17,40 +16,20 @@ import (
 
 type SessionsTestSuite struct {
 	suite.Suite
-	db     *storage.Connection
-	Config *conf.GlobalConfiguration
+	db             *storage.Connection
+	Config         *conf.GlobalConfiguration
+	OrganizationID uuid.UUID
+	ProjectID      uuid.UUID
 }
 
 func (ts *SessionsTestSuite) SetupTest() {
-	TruncateAll(ts.db)
-
-	project_id := uuid.Must(uuid.NewV4())
-	// Create a project
-	if err := ts.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Create the admin of the organization
-	user, err := NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
-	require.NoError(ts.T(), err, "Error making new user")
-	require.NoError(ts.T(), ts.db.Create(user, "organization_id", "organization_role"), "Error creating user")
-
-	// Create the organization
-	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	if err := ts.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Set the user as the admin of the organization
-	if err := ts.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
+	ts.ProjectID, ts.OrganizationID, _ = InitializeTestDatabase(ts.T(), ts.db, ts.Config)
 
 	email := "test@example.com"
-	user2, err := NewUser("", email, "secret", ts.Config.JWT.Aud, nil, organization_id, uuid.Nil)
+	user2, err := NewUser("", email, "secret", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 
-	err = ts.db.Create(user2, "project_id", "organization_role")
+	err = ts.db.Create(user2, "organization_role")
 	require.NoError(ts.T(), err)
 }
 
@@ -69,8 +48,7 @@ func TestSession(t *testing.T) {
 
 func (ts *SessionsTestSuite) TestFindBySessionIDWithForUpdate() {
 
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := FindUserByEmailAndAudience(ts.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err := FindUserByEmailAndAudience(ts.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, uuid.Nil)
 	require.NoError(ts.T(), err)
 	session, err := NewSession(u.ID, nil)
 	require.NoError(ts.T(), err)
@@ -92,8 +70,7 @@ func (ts *SessionsTestSuite) AddClaimAndReloadSession(session *Session, claim Au
 
 func (ts *SessionsTestSuite) TestCalculateAALAndAMR() {
 	totalDistinctClaims := 3
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := FindUserByEmailAndAudience(ts.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err := FindUserByEmailAndAudience(ts.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, uuid.Nil)
 	require.NoError(ts.T(), err)
 	session, err := NewSession(u.ID, nil)
 	require.NoError(ts.T(), err)

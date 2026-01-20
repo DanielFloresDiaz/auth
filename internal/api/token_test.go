@@ -27,8 +27,10 @@ import (
 
 type TokenTestSuite struct {
 	suite.Suite
-	API    *API
-	Config *conf.GlobalConfiguration
+	API            *API
+	Config         *conf.GlobalConfiguration
+	OrganizationID uuid.UUID
+	ProjectID      uuid.UUID
 
 	RefreshToken *models.RefreshToken
 	User         *models.User
@@ -50,37 +52,15 @@ func TestToken(t *testing.T) {
 
 func (ts *TokenTestSuite) SetupTest() {
 	ts.RefreshToken = nil
-	models.TruncateAll(ts.API.db)
-
-	project_id := uuid.Must(uuid.NewV4())
-	// Create a project
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project')", project_id)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Create the admin of the organization
-	user, err := models.NewUser("", "admin@example.com", "test", ts.Config.JWT.Aud, nil, uuid.Nil, project_id)
-	require.NoError(ts.T(), err, "Error making new user")
-	require.NoError(ts.T(), ts.API.db.Create(user, "organization_id", "organization_role"), "Error creating user")
-
-	// Create the organization
-	organization_id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	if err := ts.API.db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES ('%s', 'test_organization', '%s', '%s')", organization_id, project_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
-
-	// Set the user as the admin of the organization
-	if err := ts.API.db.RawQuery(fmt.Sprintf("UPDATE auth.users SET organization_id = '%s', organization_role='admin' WHERE id = '%s'", organization_id, user.ID)).Exec(); err != nil {
-		panic(err)
-	}
+	ts.ProjectID, ts.OrganizationID, _ = InitializeTestDatabase(ts.T(), ts.API, ts.Config)
 
 	// Create user & refresh token
-	u, err := models.NewUser("", "test@example.com", "password", ts.Config.JWT.Aud, nil, organization_id, uuid.Nil)
+	u, err := models.NewUser("", "test@example.com", "password", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err, "Error creating test user model")
 	t := time.Now()
 	u.EmailConfirmedAt = &t
 	u.BannedUntil = nil
-	require.NoError(ts.T(), ts.API.db.Create(u, "project_id", "organization_role"), "Error saving new test user")
+	require.NoError(ts.T(), ts.API.db.Create(u, "organization_role"), "Error saving new test user")
 
 	ts.User = u
 	ts.RefreshToken, err = models.GrantAuthenticatedUser(ts.API.db, u, models.GrantParams{})
@@ -315,7 +295,8 @@ func (ts *TokenTestSuite) TestTokenPasswordGrantSuccess() {
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
 		"email":           "test@example.com",
 		"password":        "password",
-		"organization_id": "123e4567-e89b-12d3-a456-426655440000",
+		"organization_id": ts.OrganizationID.String(),
+		"project_id":      ts.ProjectID.String(),
 	}))
 
 	req := httptest.NewRequest(http.MethodPost, "http://localhost/token?grant_type=password", &buffer)
@@ -364,7 +345,7 @@ func (ts *TokenTestSuite) TestTokenPKCEGrantFailure() {
 	invalidVerifier := codeVerifier + "123"
 	codeChallenge := sha256.Sum256([]byte(codeVerifier))
 	challenge := base64.RawURLEncoding.EncodeToString(codeChallenge[:])
-	flowState := models.NewFlowState("github", challenge, models.SHA256, models.OAuth, nil, ts.User.OrganizationID.UUID, ts.User.ProjectID.UUID)
+	flowState := models.NewFlowState("github", challenge, models.SHA256, models.OAuth, nil, ts.User.OrganizationID.UUID, ts.User.ProjectID)
 	flowState.AuthCode = authCode
 	require.NoError(ts.T(), ts.API.db.Create(flowState))
 	cases := []struct {
@@ -533,14 +514,13 @@ func (ts *TokenTestSuite) TestRefreshTokenReuseRevocation() {
 }
 
 func (ts *TokenTestSuite) createBannedUser() *models.User {
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.NewUser("", "banned@example.com", "password", ts.Config.JWT.Aud, nil, id, uuid.Nil)
+	u, err := models.NewUser("", "banned@example.com", "password", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err, "Error creating test user model")
 	t := time.Now()
 	u.EmailConfirmedAt = &t
 	t = t.Add(24 * time.Hour)
 	u.BannedUntil = &t
-	require.NoError(ts.T(), ts.API.db.Create(u, "project_id", "organization_role"), "Error saving new test banned user")
+	require.NoError(ts.T(), ts.API.db.Create(u, "organization_role"), "Error saving new test banned user")
 
 	ts.RefreshToken, err = models.GrantAuthenticatedUser(ts.API.db, u, models.GrantParams{})
 	require.NoError(ts.T(), err, "Error creating refresh token")
@@ -608,7 +588,8 @@ func (ts *TokenTestSuite) TestMagicLinkPKCESignIn() {
 		CreateUser:          true,
 		CodeChallengeMethod: "s256",
 		CodeChallenge:       challenge,
-		OrganizationID:      uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000")),
+		OrganizationID:      ts.OrganizationID,
+		ProjectID:           ts.ProjectID,
 	}))
 	req = httptest.NewRequest(http.MethodPost, "/otp", &buffer)
 	req.Header.Set("Content-Type", "application/json")
@@ -617,8 +598,7 @@ func (ts *TokenTestSuite) TestMagicLinkPKCESignIn() {
 	ts.API.handler.ServeHTTP(w, req)
 	require.Equal(ts.T(), http.StatusOK, w.Code)
 
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 
 	// Verify OTP
@@ -631,7 +611,7 @@ func (ts *TokenTestSuite) TestMagicLinkPKCESignIn() {
 	assert.Equal(ts.T(), http.StatusSeeOther, w.Code)
 	rURL, _ := w.Result().Location()
 
-	u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, id, uuid.Nil)
+	u, err = models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err)
 	assert.True(ts.T(), u.IsConfirmed())
 
@@ -828,12 +808,11 @@ end; $$ language plpgsql;`,
 
 func (ts *TokenTestSuite) TestAllowSelectAuthenticationMethods() {
 
-	id := uuid.Must(uuid.FromString("123e4567-e89b-12d3-a456-426655440000"))
-	companyUser, err := models.NewUser("12345678", "test@company.com", "password", ts.Config.JWT.Aud, nil, id, uuid.Nil)
+	companyUser, err := models.NewUser("12345678", "test@company.com", "password", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
 	t := time.Now()
 	companyUser.EmailConfirmedAt = &t
 	require.NoError(ts.T(), err, "Error creating test user model")
-	require.NoError(ts.T(), ts.API.db.Create(companyUser, "project_id", "organization_role"), "Error saving new test user")
+	require.NoError(ts.T(), ts.API.db.Create(companyUser, "organization_role"), "Error saving new test user")
 
 	type allowSelectAuthMethodsTestcase struct {
 		desc           string
