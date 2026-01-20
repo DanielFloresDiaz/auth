@@ -39,7 +39,6 @@ CREATE TABLE IF NOT EXISTS "auth".organizations (
 	admin_id uuid UNIQUE NOT NULL,
 	name varchar(255) NULL,
 	description text NULL,
-	tier text DEFAULT 'free',
 	created_at timestamptz DEFAULT current_timestamp,
 	updated_at timestamptz DEFAULT current_timestamp,
 	CONSTRAINT organizations_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE,
@@ -47,6 +46,23 @@ CREATE TABLE IF NOT EXISTS "auth".organizations (
 	CONSTRAINT organizations_pkey PRIMARY KEY (id)
 );
 --rollback DROP TABLE "auth".organizations;
+
+--changeset solomon.auth:5.1 labels:auth context:auth
+--comment: create organizations_tier table
+CREATE TABLE IF NOT EXISTS "auth".organizations_tier (
+	organization_id uuid PRIMARY KEY,
+	tier text DEFAULT 'free',
+	admin_tier_model "public".tier_models DEFAULT 'low',
+	admin_tier_time "public".tier_times DEFAULT 'low',
+	admin_tier_usage "public".tier_usages DEFAULT 'low',
+	client_tier_model "public".tier_models DEFAULT 'low',
+	client_tier_time "public".tier_times DEFAULT 'low',
+	client_tier_usage "public".tier_usages DEFAULT 'low',
+	created_at timestamptz DEFAULT current_timestamp,
+	updated_at timestamptz DEFAULT current_timestamp,
+	CONSTRAINT organizations_tier_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES "auth".organizations(id) ON DELETE CASCADE
+);
+--rollback DROP TABLE "auth".organizations_tier;
 
 --changeset solomon.auth:6 labels:auth context:auth
 --comment: create smtp_configs_organizations table
@@ -89,27 +105,6 @@ CREATE TABLE IF NOT EXISTS "auth".organization_roles_permissions (
 );
 --rollback DROP TABLE "auth".organization_roles_permissions;
 
---changeset solomon.auth:9 labels:auth context:auth
---comment: add tier_model columns to organizations table
-ALTER TABLE "auth".organizations ADD COLUMN IF NOT EXISTS admin_tier_model "public".tier_models DEFAULT 'low';
-ALTER TABLE "auth".organizations ADD COLUMN IF NOT EXISTS client_tier_model "public".tier_models DEFAULT 'low';
---rollback ALTER TABLE "auth".organizations DROP COLUMN admin_tier_model;
---rollback ALTER TABLE "auth".organizations DROP COLUMN client_tier_model;
-
---changeset solomon.auth:10 labels:auth context:auth
---comment: add tier_time columns to organizations table
-ALTER TABLE "auth".organizations ADD COLUMN IF NOT EXISTS admin_tier_time "public".tier_times DEFAULT 'low';
-ALTER TABLE "auth".organizations ADD COLUMN IF NOT EXISTS client_tier_time "public".tier_times DEFAULT 'low';
---rollback ALTER TABLE "auth".organizations DROP COLUMN admin_tier_time;
---rollback ALTER TABLE "auth".organizations DROP COLUMN client_tier_time;
-
---changeset solomon.auth:11 labels:auth context:auth
---comment: add tier_usage columns to organizations table
-ALTER TABLE "auth".organizations ADD COLUMN IF NOT EXISTS admin_tier_usage "public".tier_usages DEFAULT 'low';
-ALTER TABLE "auth".organizations ADD COLUMN IF NOT EXISTS client_tier_usage "public".tier_usages DEFAULT 'low';
---rollback ALTER TABLE "auth".organizations DROP COLUMN admin_tier_usage;
---rollback ALTER TABLE "auth".organizations DROP COLUMN client_tier_usage;
-
 --changeset solomon.auth:12 labels:auth context:auth
 --comment: create api_keys table
 CREATE TABLE IF NOT EXISTS "auth".api_keys (
@@ -130,8 +125,8 @@ CREATE TABLE IF NOT EXISTS "auth".api_keys (
 --rollback DROP TABLE "auth".api_keys;
 
 --changeset solomon.auth:13 labels:auth context:auth
---comment: create table tier_organizations_tiers
-CREATE TABLE IF NOT EXISTS "auth".tier_organizations_tiers (
+--comment: create table projects_tiers
+CREATE TABLE IF NOT EXISTS "auth".projects_tiers (
 	id serial UNIQUE NOT NULL,
 	project_id uuid NOT NULL,
 	tier text NOT NULL,
@@ -140,17 +135,17 @@ CREATE TABLE IF NOT EXISTS "auth".tier_organizations_tiers (
 	tier_usage "public".tier_usages NOT NULL,
 	created_at timestamptz DEFAULT current_timestamp,
 	updated_at timestamptz DEFAULT current_timestamp,
-	CONSTRAINT tier_organizations_tiers_pkey PRIMARY KEY (id),
-	CONSTRAINT tier_organizations_tiers_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE,
-	CONSTRAINT tier_organizations_tiers_project_id_tier_unique UNIQUE (project_id, tier)
+	CONSTRAINT projects_tiers_pkey PRIMARY KEY (id),
+	CONSTRAINT projects_tiers_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE,
+	CONSTRAINT projects_tiers_project_id_tier_unique UNIQUE (project_id, tier)
 );
---rollback DROP TABLE "auth".tier_organizations_tiers;
+--rollback DROP TABLE "auth".projects_tiers;
 
 --changeset solomon.auth:14 labels:auth context:auth
 --comment: alter table auth.users
 ALTER TABLE "auth".users
         ADD COLUMN organization_id uuid NULL,
-        ADD COLUMN project_id uuid NULL,
+        ADD COLUMN project_id uuid NOT NULL,
         ADD COLUMN organization_role "auth".organization_roles NOT NULL DEFAULT 'client',
         ADD CONSTRAINT users_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects (id) ON DELETE CASCADE,
         ADD CONSTRAINT users_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES "auth".organizations (id) ON DELETE CASCADE,
@@ -173,7 +168,7 @@ ALTER TABLE "auth".users
 --comment: alter table auth.flow_state
 ALTER TABLE "auth".flow_state
 ADD COLUMN organization_id uuid NULL,
-ADD COLUMN project_id uuid NULL,
+ADD COLUMN project_id uuid NOT NULL,
 ADD CONSTRAINT flow_state_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES "auth".organizations (id),
 ADD CONSTRAINT flow_state_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects (id);
 --rollback ALTER TABLE "auth".flow_state
@@ -186,7 +181,7 @@ ADD CONSTRAINT flow_state_project_id_fkey FOREIGN KEY (project_id) REFERENCES "a
 --comment: alter table auth.identitites
 ALTER TABLE "auth".identities
 ADD COLUMN organization_id uuid NULL,
-ADD COLUMN project_id uuid NULL,
+ADD COLUMN project_id uuid NOT NULL,
 ADD CONSTRAINT identities_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES "auth".organizations (id) ON DELETE CASCADE,
 ADD CONSTRAINT identities_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects (id) ON DELETE CASCADE;
 --rollback ALTER TABLE "auth".identities
