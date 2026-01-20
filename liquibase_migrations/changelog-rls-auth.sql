@@ -7,28 +7,28 @@ CREATE POLICY api_keys_policy ON "auth".api_keys
 FOR ALL
 USING (
 	(
-		organization_id = current_setting('app.current_organization')::uuid
+		organization_id = current_setting('app.current_organization', true)::uuid
 		AND
-		current_setting('app.organization_role')::text = 'admin'
+		current_setting('app.organization_role', true)::text = 'admin'
 	)
 	OR
 	(
-		current_setting('app.organization_role')::text = 'project_admin'
+		current_setting('app.organization_role', true)::text = 'project_admin'
 		AND
-		current_setting('app.current_project')::uuid = project_id
+		current_setting('app.current_project', true)::uuid = project_id
 	)
 )
 WITH CHECK (
 	(
-		organization_id = current_setting('app.current_organization')::uuid
+		organization_id = current_setting('app.current_organization', true)::uuid
 		AND
-		current_setting('app.organization_role')::text = 'admin'
+		current_setting('app.organization_role', true)::text = 'admin'
 	)
 	OR
 	(
-		current_setting('app.organization_role')::text = 'project_admin'
+		current_setting('app.organization_role', true)::text = 'project_admin'
 		AND
-		current_setting('app.current_project')::uuid = project_id
+		current_setting('app.current_project', true)::uuid = project_id
 	)
 );
 --rollback DROP POLICY api_keys_policy ON "auth".api_keys;
@@ -43,12 +43,12 @@ ALTER TABLE "auth".organizations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY organizations_select_policy ON "auth".organizations
 FOR SELECT
 USING (
-	current_setting('app.current_owner')::uuid = admin_id
+	current_setting('app.current_owner', true)::uuid = admin_id
 	OR
 	(
-		current_setting('app.organization_role')::text = 'project_admin'
+		current_setting('app.organization_role', true)::text = 'project_admin'
 		AND
-		current_setting('app.current_project')::uuid = project_id
+		current_setting('app.current_project', true)::uuid = project_id
 	)
 );
 --rollback DROP POLICY organizations_select_policy ON "auth".organizations;
@@ -58,21 +58,21 @@ USING (
 CREATE POLICY organizations_update_policy ON "auth".organizations
 FOR UPDATE
 USING (
-	current_setting('app.current_owner')::uuid = admin_id
+	current_setting('app.current_owner', true)::uuid = admin_id
 	OR
 	(
-		current_setting('app.organization_role')::text = 'project_admin'
+		current_setting('app.organization_role', true)::text = 'project_admin'
 		AND
-		current_setting('app.current_project')::uuid = project_id
+		current_setting('app.current_project', true)::uuid = project_id
 	)
 )
 WITH CHECK (
-	current_setting('app.current_owner')::uuid = admin_id
+	current_setting('app.current_owner', true)::uuid = admin_id
 	OR
 	(
-		current_setting('app.organization_role')::text = 'project_admin'
+		current_setting('app.organization_role', true)::text = 'project_admin'
 		AND
-		current_setting('app.current_project')::uuid = project_id
+		current_setting('app.current_project', true)::uuid = project_id
 	)
 );
 --rollback DROP POLICY organizations_update_policy ON "auth".organizations;
@@ -82,7 +82,7 @@ WITH CHECK (
 CREATE POLICY organizations_insert_policy ON "auth".organizations
 FOR INSERT
 WITH CHECK (
-	current_setting('app.current_owner')::uuid = admin_id
+	current_setting('app.current_owner', true)::uuid = admin_id
 );
 --rollback DROP POLICY organizations_insert_policy ON "auth".organizations;
 
@@ -91,7 +91,7 @@ WITH CHECK (
 CREATE POLICY organizations_delete_policy ON "auth".organizations
 FOR DELETE
 USING (
-	current_setting('app.organization_role')::text = 'project_admin'
-	AND current_setting('app.current_project')::uuid = project_id
+	current_setting('app.organization_role', true)::text = 'project_admin'
+	AND current_setting('app.current_project', true)::uuid = project_id
 );
 --rollback DROP POLICY organizations_delete_policy ON "auth".organizations;
