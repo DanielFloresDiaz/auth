@@ -1,6 +1,6 @@
 # Set default values for PostgreSQL connection
 : ${POSTGRES_PORT:=5432}
-: ${POSTGRES_USER:=auth_admin}
+: ${POSTGRES_USER:=postgres}
 : ${POSTGRES_HOST:=localhost}
 : ${POSTGRES_PASSWORD:=root}
 
