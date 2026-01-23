@@ -35,7 +35,7 @@ func InitializeTestDatabase(t *testing.T, api *API, config *conf.GlobalConfigura
 
 	setup_db := &storage.Connection{Connection: superuserDB}
 
-	models.TruncateAll(setup_db)
+	require.NoError(t, models.TruncateAll(setup_db))
 
 	project_id := uuid.Must(uuid.NewV4())
 	// Create a project with a unique name using the UUID
