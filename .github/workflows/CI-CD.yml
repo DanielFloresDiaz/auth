@@ -98,12 +98,60 @@ jobs:
         run: psql -f hack/init_postgres.sql postgresql://postgres:root@localhost:5432/postgres
       - name: Run migrations
         run: make migrate_dev
-      - name: Run extra migrations
+      - name: Run liquibase migrations - test
         uses: liquibase-github-actions/update@v4.30.0
         with:
           changelogFile: 'liquibase_migrations/changelog-test.sql'
           url: 'jdbc:postgresql://postgres:5432/postgres'
-          username: 'auth_admin'
+          username: 'postgres'
+          password: 'root'
+          rollbackOnError: 'true'
+      - name: Run liquibase migrations - public
+        uses: liquibase-github-actions/update@v4.30.0
+        with:
+          changelogFile: 'liquibase_migrations/changelog-public.sql'
+          url: 'jdbc:postgresql://postgres:5432/postgres'
+          username: 'postgres'
+          password: 'root'
+          rollbackOnError: 'true'
+      - name: Run liquibase migrations - auth
+        uses: liquibase-github-actions/update@v4.30.0
+        with:
+          changelogFile: 'liquibase_migrations/changelog-auth.sql'
+          url: 'jdbc:postgresql://postgres:5432/postgres'
+          username: 'postgres'
+          password: 'root'
+          rollbackOnError: 'true'
+      - name: Run liquibase migrations - rls-auth
+        uses: liquibase-github-actions/update@v4.30.0
+        with:
+          changelogFile: 'liquibase_migrations/changelog-rls-auth.sql'
+          url: 'jdbc:postgresql://postgres:5432/postgres'
+          username: 'postgres'
+          password: 'root'
+          rollbackOnError: 'true'
+      - name: Run liquibase migrations - index-auth
+        uses: liquibase-github-actions/update@v4.30.0
+        with:
+          changelogFile: 'liquibase_migrations/changelog-index-auth.sql'
+          url: 'jdbc:postgresql://postgres:5432/postgres'
+          username: 'postgres'
+          password: 'root'
+          rollbackOnError: 'true'
+      - name: Run liquibase migrations - grants-auth
+        uses: liquibase-github-actions/update@v4.30.0
+        with:
+          changelogFile: 'liquibase_migrations/changelog-grants-auth.sql'
+          url: 'jdbc:postgresql://postgres:5432/postgres'
+          username: 'postgres'
+          password: 'root'
+          rollbackOnError: 'true'
+      - name: Run liquibase migrations - procedures-auth
+        uses: liquibase-github-actions/update@v4.30.0
+        with:
+          changelogFile: 'liquibase_migrations/changelog-procedures-auth.xml'
+          url: 'jdbc:postgresql://postgres:5432/postgres'
+          username: 'postgres'
           password: 'root'
           rollbackOnError: 'true'
       - name: Run tests
