@@ -413,6 +413,8 @@ jobs:
       
       - name: Install Kustomize
         run: |
+          mkdir -p /tmp/kustomize_install
+          cd /tmp/kustomize_install
           curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
           sudo mv kustomize /usr/local/bin/
       
@@ -440,7 +442,7 @@ jobs:
           cat kustomization.yaml
           
           # Apply Kustomize configuration
-          kubectl apply -k auth-kustomize/overlays/dev
+          kubectl apply -k .
           
           # Verify deployment
           # Set the correct deployment name based on environment
@@ -496,7 +498,7 @@ jobs:
           cat kustomization.yaml
           
           # Apply Kustomize configuration
-          kubectl apply -k auth-kustomize/overlays/prod
+          kubectl apply -k .
           
           # Verify deployment
           # Set the correct deployment name based on environment
