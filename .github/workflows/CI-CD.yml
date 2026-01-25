@@ -406,7 +406,6 @@ jobs:
       - name: Ensure base Kubernetes resources exist
         run: |
           ENV=${{ steps.deployment_env.outputs.environment }}
-          kubectl apply -f auth-kubernetes/namespace.yaml
           kubectl apply -f auth-kubernetes/serviceaccount.yaml
           kubectl apply -f auth-kubernetes/app-secrets.yaml
           kubectl apply -f auth-kubernetes/frontend-config.yaml
