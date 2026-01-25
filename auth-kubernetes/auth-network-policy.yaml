@@ -2,7 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: auth-network-policy
-  namespace: auth
+  namespace: solomon
 spec:
   podSelector:
     matchLabels:

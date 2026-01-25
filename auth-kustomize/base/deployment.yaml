@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: auth-deployment
-  namespace: auth
+  namespace: solomon
   labels:
     app: auth
 spec:
@@ -109,16 +109,6 @@ spec:
               export DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
               exec auth
           env:
-            - name: ENVIRONMENT
-              valueFrom:
-                configMapKeyRef:
-                  name: auth-generated-config
-                  key: ENVIRONMENT
-            - name: DEPLOYMENT_ENVIRONMENT
-              valueFrom:
-                configMapKeyRef:
-                  name: auth-generated-config
-                  key: DEPLOYMENT_ENVIRONMENT
             # JWT Configuration
             - name: GOTRUE_JWT_EXP
               valueFrom:
@@ -286,11 +276,6 @@ spec:
                 configMapKeyRef:
                   name: auth-generated-config
                   key: GOTRUE_PASSWORD_MIN_LENGTH
-            - name: GOTRUE_PASSWORD_REQUIRED_CHARACTERS
-              valueFrom:
-                configMapKeyRef:
-                  name: auth-generated-config
-                  key: GOTRUE_PASSWORD_REQUIRED_CHARACTERS
             - name: GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED
               valueFrom:
                 configMapKeyRef:

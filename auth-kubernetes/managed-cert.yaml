@@ -2,7 +2,7 @@ apiVersion: networking.gke.io/v1
 kind: ManagedCertificate
 metadata:
   name: auth-cert
-  namespace: auth
+  namespace: solomon
 spec:
   domains:
     - solomon-auth.com

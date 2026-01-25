@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: auth-service-prod
-  namespace: auth
+  namespace: solomon
   labels:
     service: auth-service-prod
     environment: prod

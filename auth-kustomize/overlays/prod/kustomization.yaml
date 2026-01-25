@@ -5,7 +5,7 @@ resources:
   - ../../base
   - ingress.yaml
 
-namespace: auth
+namespace: solomon
 
 labels:
 - pairs:
@@ -17,4 +17,10 @@ configMapGenerator:
   - name: auth-generated-config
     behavior: merge
     literals:
-      - ENVIRONMENT=prod
+      - GOTRUE_LOG_LEVEL=info
+      - DB_NAME=postgres_auth
+      - API_EXTERNAL_URL=https://solomon-auth.com/
+      - GOTRUE_SITE_URL=https://solomon-auth.com/
+      - GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://solomon-auth.com/auth/callback
+
+
