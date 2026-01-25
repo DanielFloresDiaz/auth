@@ -470,11 +470,11 @@ jobs:
             INGRESS_NAME="auth-ingress"
           fi
           
-          echo "Verifying deployment: $DEPLOYMENT_NAME in namespace auth"
-          kubectl rollout status deployment/$DEPLOYMENT_NAME -n auth
+          echo "Verifying deployment: $DEPLOYMENT_NAME in namespace solomon"
+          kubectl rollout status deployment/$DEPLOYMENT_NAME -n solomon
           
           # Verify the image version was updated
-          DEPLOYED_IMAGE=$(kubectl get deployment/$DEPLOYMENT_NAME -n auth -o jsonpath='{.spec.template.spec.containers[0].image}')
+          DEPLOYED_IMAGE=$(kubectl get deployment/$DEPLOYMENT_NAME -n solomon -o jsonpath='{.spec.template.spec.containers[0].image}')
           echo "✅ Deployed image: $DEPLOYED_IMAGE"
           
           if [[ "$DEPLOYED_IMAGE" == *"$DOCKER_TAG"* ]]; then
@@ -485,8 +485,8 @@ jobs:
           fi
           
           # Verify ingress exists
-          echo "Verifying ingress: $INGRESS_NAME in namespace auth"
-          if kubectl get ingress $INGRESS_NAME -n auth > /dev/null 2>&1; then
+          echo "Verifying ingress: $INGRESS_NAME in namespace solomon"
+          if kubectl get ingress $INGRESS_NAME -n solomon > /dev/null 2>&1; then
             echo "✅ Ingress $INGRESS_NAME exists!"
           else
             echo "❌ Ingress $INGRESS_NAME does not exist!"
