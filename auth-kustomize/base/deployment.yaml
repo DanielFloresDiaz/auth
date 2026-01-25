@@ -92,6 +92,22 @@ spec:
             - "/bin/sh"
             - "-c"
             - |
+              urlencode() {
+                local string="${1}"
+                local strlen=${#string}
+                local encoded=""
+                local pos=0
+                while [ $pos -lt $strlen ]; do
+                  c=${string:$pos:1}
+                  case "$c" in
+                    [-_.~a-zA-Z0-9] ) o="${c}" ;;
+                    * )               o=$(printf '%%%02x' "'$c")
+                  esac
+                  encoded="${encoded}${o}"
+                  pos=$((pos+1))
+                done
+                echo "${encoded}"
+              }
               echo "Waiting for Cloud SQL Proxy to be ready..."
               max_attempts=60
               attempts=0
@@ -106,8 +122,10 @@ spec:
               done
               echo "Cloud SQL Proxy is ready!"
               . /env-vars/env-secrets.sh
-              export DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
-              exec auth
+              encoded_password=$(urlencode "$DB_PASSWORD")
+              export GOTRUE_DB_DATABASE_URL="postgres://${DB_USER}:${encoded_password}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+              echo "Starting auth"
+              exec auth serve
           env:
             # JWT Configuration
             - name: GOTRUE_JWT_EXP
