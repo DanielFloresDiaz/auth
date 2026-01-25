@@ -387,34 +387,28 @@ jobs:
           # Remove 'v' prefix if present for version comparison
           VERSION=${TAG#v}
           
+          echo "deploy_dev=true" >> $GITHUB_OUTPUT
+          
           if [[ $TAG == dev* ]] || [[ $VERSION =~ ^0\. ]]; then
             echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "deploy_prod=false" >> $GITHUB_OUTPUT
             echo "Deploying to development environment with tag: $TAG"
           else
             echo "environment=prod" >> $GITHUB_OUTPUT
+            echo "deploy_prod=true" >> $GITHUB_OUTPUT
             echo "Deploying to production environment with tag: $TAG"
           fi
       
-      - name: Configure kubectl for dev
-        if: steps.deployment_env.outputs.environment == 'dev'
-        run: gcloud container clusters get-credentials ${{ secrets.GKE_DEV_CLUSTER_NAME }} --region ${{ secrets.GKE_CLUSTER_REGION }} --project ${{ secrets.GCP_PROJECT_ID }}
-      
-      - name: Configure kubectl for prod
-        if: steps.deployment_env.outputs.environment == 'prod'
-        run: gcloud container clusters get-credentials ${{ secrets.GKE_PROD_CLUSTER_NAME }} --region ${{ secrets.GKE_CLUSTER_REGION }} --project ${{ secrets.GCP_PROJECT_ID }}
+      - name: Configure kubectl
+        run: |
+          gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER_NAME }} --region ${{ secrets.GKE_CLUSTER_REGION }} --project ${{ secrets.GCP_PROJECT_ID }}
       
       - name: Ensure base Kubernetes resources exist
         run: |
-          ENV=${{ steps.deployment_env.outputs.environment }}
           kubectl apply -f auth-kubernetes/serviceaccount.yaml
           kubectl apply -f auth-kubernetes/app-secrets.yaml
           kubectl apply -f auth-kubernetes/frontend-config.yaml
           kubectl apply -f auth-kubernetes/managed-cert.yaml
-          
-          # Apply environment specific services
-          kubectl apply -f auth-kubernetes/services/service-$ENV.yaml
-          
-          # Apply network policies
           kubectl apply -f auth-kubernetes/auth-network-policy.yaml
       
       - name: Install Kustomize
@@ -422,11 +416,15 @@ jobs:
           curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
           sudo mv kustomize /usr/local/bin/
       
-      - name: Update deployment image tag
+      - name: Deploy to dev
+        if: steps.deployment_env.outputs.deploy_dev == 'true'
         run: |
+          ENV=dev
           TAG=${{ steps.deployment_env.outputs.tag }}
-          ENV=${{ steps.deployment_env.outputs.environment }}
           
+          # Apply environment specific services
+          kubectl apply -f auth-kubernetes/services/service-$ENV.yaml
+
           # Remove "v" prefix if present for Docker image tag
           DOCKER_TAG=${TAG#v}
           
@@ -440,34 +438,70 @@ jobs:
           # Show the changes
           echo "Deploying image with tag: $DOCKER_TAG"
           cat kustomization.yaml
-      
-      - name: Apply Kustomize configuration for dev
-        if: steps.deployment_env.outputs.environment == 'dev'
-        run: |
+          
+          # Apply Kustomize configuration
           kubectl apply -k auth-kustomize/overlays/dev
+          
+          # Verify deployment
+          # Set the correct deployment name based on environment
+          DEPLOYMENT_NAME="dev-auth-deployment"
+          INGRESS_NAME="dev-auth-ingress"
+          
+          echo "Verifying deployment: $DEPLOYMENT_NAME in namespace solomon"
+          kubectl rollout status deployment/$DEPLOYMENT_NAME -n solomon
+          
+          # Verify the image version was updated
+          DEPLOYED_IMAGE=$(kubectl get deployment/$DEPLOYMENT_NAME -n solomon -o jsonpath='{.spec.template.spec.containers[0].image}')
+          echo "✅ Deployed image: $DEPLOYED_IMAGE"
+          
+          if [[ "$DEPLOYED_IMAGE" == *"$DOCKER_TAG"* ]]; then
+            echo "✅ Correct image tag deployed!"
+          else
+            echo "❌ Incorrect image tag deployed!"
+            exit 1
+          fi
+          
+          # Verify ingress exists
+          echo "Verifying ingress: $INGRESS_NAME in namespace solomon"
+          if kubectl get ingress $INGRESS_NAME -n solomon > /dev/null 2>&1; then
+            echo "✅ Ingress $INGRESS_NAME exists!"
+          else
+            echo "❌ Ingress $INGRESS_NAME does not exist!"
+            exit 1
+          fi
+          
+          echo "✅ Deployment to $ENV environment completed successfully!"
       
-      - name: Apply Kustomize configuration for prod
-        if: steps.deployment_env.outputs.environment == 'prod'
+      - name: Deploy to prod
+        if: steps.deployment_env.outputs.deploy_prod == 'true'
         run: |
-          kubectl apply -k auth-kustomize/overlays/prod
-      
-      - name: Verify deployment
-        timeout-minutes: 5
-        run: |
-          ENV=${{ steps.deployment_env.outputs.environment }}
+          ENV=prod
           TAG=${{ steps.deployment_env.outputs.tag }}
           
-          # Remove "v" prefix if present for Docker image tag comparison
+          # Apply environment specific services
+          kubectl apply -f auth-kubernetes/services/service-$ENV.yaml
+
+          # Remove "v" prefix if present for Docker image tag
           DOCKER_TAG=${TAG#v}
           
+          # Create a kustomization overlay to set the image tag
+          cd auth-kustomize/overlays/$ENV
+          
+          # Force lowercase for image name to match GHCR and existing manifests
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr 'A-Z' 'a-z')
+          kustomize edit set image ghcr.io/$REPO_LOWER=ghcr.io/$REPO_LOWER:$DOCKER_TAG
+          
+          # Show the changes
+          echo "Deploying image with tag: $DOCKER_TAG"
+          cat kustomization.yaml
+          
+          # Apply Kustomize configuration
+          kubectl apply -k auth-kustomize/overlays/prod
+          
+          # Verify deployment
           # Set the correct deployment name based on environment
-          if [[ "$ENV" == "dev" ]]; then
-            DEPLOYMENT_NAME="dev-auth-deployment"
-            INGRESS_NAME="dev-auth-ingress"
-          else
-            DEPLOYMENT_NAME="auth-deployment"
-            INGRESS_NAME="auth-ingress"
-          fi
+          DEPLOYMENT_NAME="auth-deployment"
+          INGRESS_NAME="auth-ingress"
           
           echo "Verifying deployment: $DEPLOYMENT_NAME in namespace solomon"
           kubectl rollout status deployment/$DEPLOYMENT_NAME -n solomon
