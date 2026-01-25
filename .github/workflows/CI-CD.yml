@@ -409,7 +409,6 @@ jobs:
           kubectl apply -f auth-kubernetes/namespace.yaml
           kubectl apply -f auth-kubernetes/serviceaccount.yaml
           kubectl apply -f auth-kubernetes/app-secrets.yaml
-          kubectl apply -f auth-kubernetes/configmap.yaml
           kubectl apply -f auth-kubernetes/frontend-config.yaml
           kubectl apply -f auth-kubernetes/managed-cert.yaml
           
