@@ -1,4 +1,4 @@
-.PHONY: all build deps dev-deps image migrate test vet sec format unused static generate dev down docker-test docker-build docker-clean kapply-rec kustomize-dev kustomize-prod
+.PHONY: all build deps dev-deps image migrate test vet sec format unused static generate dev down docker-test docker-build docker-clean kapply-dev kustomize-dev kustomize-prod
 CHECK_FILES?=./...
 
 ifdef RELEASE_VERSION
