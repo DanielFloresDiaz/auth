@@ -350,6 +350,10 @@ jobs:
       contents: read
       id-token: write # Needed for GCP authentication
     
+    env:
+      GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -371,6 +375,9 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
+      
+      - name: Bind secrets
+        run: bash .gcloud/bind-secrets.sh
       
       - name: Install gke-gcloud-auth-plugin
         run: |
@@ -410,6 +417,9 @@ jobs:
           kubectl apply -f auth-kubernetes/frontend-config.yaml
           kubectl apply -f auth-kubernetes/managed-cert.yaml
           kubectl apply -f auth-kubernetes/auth-network-policy.yaml
+      
+      - name: Generate GHCR Secret
+        run: python scripts/k8s/generate_ghcr_secret.py -u ${{ github.actor }} -t ${{ secrets.GHCR_PAT }} -n solomon --apply
       
       - name: Install Kustomize
         run: |

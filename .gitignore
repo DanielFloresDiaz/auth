@@ -18,6 +18,3 @@ www/.DS_Store
 www/node_modules
 npm-debug.log
 .data
-
-bind-secrets.sh
-k8s-secrets
