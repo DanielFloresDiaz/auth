@@ -26,18 +26,10 @@ CREATE ROLE rl_auth_user_role;
 -- Grant custom roles to users
 GRANT solomon_auth_admin_role TO solomon_admin;
 GRANT rl_auth_user_role TO rl_user;
-GRANT solomon_auth_user_role TO zion_admin;
-GRANT solomon_auth_user_role TO zion_user;
-GRANT solomon_auth_user_role TO brawler_admin;
-GRANT solomon_auth_user_role TO brawler_user;
 
 -- Grant usage permissions to all users
 GRANT USAGE ON SCHEMA auth TO solomon_admin;
 GRANT USAGE ON SCHEMA auth TO rl_user;
-GRANT USAGE ON SCHEMA auth TO zion_admin;
-GRANT USAGE ON SCHEMA auth TO zion_user;
-GRANT USAGE ON SCHEMA auth TO brawler_admin;
-GRANT USAGE ON SCHEMA auth TO brawler_user;
 
 -- Grant these roles to existing users if needed
 GRANT solomon_auth_admin_role TO auth_admin;
