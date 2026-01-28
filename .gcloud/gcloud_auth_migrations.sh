@@ -1,5 +1,19 @@
 # Parse command line options
 POSTGRES_USER="auth_admin"
+
+# Function to display help message
+show_help() {
+  echo "Usage: $0 -p port -h host -P password [database_name|--help]"
+  echo "   or: $0 --port port --host host --password password [database_name|--help]"
+  echo "  -p, --port port         : PostgreSQL port"
+  echo "  -h, --host host         : PostgreSQL host"
+  echo "  -P, --password password : PostgreSQL password"
+  echo "  database_name           : The name of the database to migrate (optional)."
+  echo "                            If not provided, both postgres_auth and postgres_auth_dev will be migrated."
+  echo "  --help                  : Display this help message."
+  exit 0
+}
+
 while [[ $# -gt 0 ]]; do
   case $1 in
     --port|-p)
@@ -49,19 +63,6 @@ export GOTRUE_DB_MIGRATIONS_PATH=$MIGRATIONS_PATH
 export API_EXTERNAL_URL="http://localhost:9999"
 export GOTRUE_SITE_URL="http://localhost:3000"
 export GOTRUE_JWT_SECRET="mysecret"
-
-# Function to display help message
-show_help() {
-  echo "Usage: $0 -p port -h host -P password [database_name|--help]"
-  echo "   or: $0 --port port --host host --password password [database_name|--help]"
-  echo "  -p, --port port         : PostgreSQL port"
-  echo "  -h, --host host         : PostgreSQL host"
-  echo "  -P, --password password : PostgreSQL password"
-  echo "  database_name           : The name of the database to migrate (optional)."
-  echo "                            If not provided, both postgres_auth and postgres_auth_dev will be migrated."
-  echo "  --help                  : Display this help message."
-  exit 0
-}
 
 # Function to URL encode a string
 urlencode() {
