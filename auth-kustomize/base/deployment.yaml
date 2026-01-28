@@ -49,7 +49,7 @@ spec:
                 filename=$(basename $file)
                 # Convert filename to uppercase and replace underscores
                 envname=$(echo $filename | tr 'a-z' 'A-Z' | tr '_' '_')
-                echo "export $envname=\"$(cat $file)\"" >> /env-vars/env-secrets.sh
+                echo "export $envname='$(cat $file)'" >> /env-vars/env-secrets.sh
               done
           volumeMounts:
             - name: secrets-store-volume

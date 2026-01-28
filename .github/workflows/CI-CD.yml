@@ -298,6 +298,7 @@ jobs:
             ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{version}}' || '' }}
             ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{major}}.{{minor}}' || '' }}
             ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{major}}' || '' }}
+            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=raw,value=latest' || '' }}
             # Always include the commit SHA
             type=sha,format=short
 
