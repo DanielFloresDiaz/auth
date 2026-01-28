@@ -1,6 +1,20 @@
 # Parse command line options
 POSTGRES_USER="postgres"
 LOG_LEVEL="ERROR"  # Default log level
+
+show_help() {
+  echo "Usage: $0 -p port -h host -P password [database_name|--help]"
+  echo "   or: $0 --port port --host host --password password [database_name|--help]"
+  echo "  -p, --port port         : PostgreSQL port"
+  echo "  -h, --host host         : PostgreSQL host"
+  echo "  -P, --password password : PostgreSQL password"
+  echo "  -l, --log-level level   : Liquibase log level (default: INFO)"
+  echo "  database_name           : The name of the database to migrate (optional)."
+  echo "                            If not provided, both postgres_auth and postgres_auth_dev will be migrated."
+  echo "  --help                  : Display this help message."
+  exit 0
+}
+
 while [[ $# -gt 0 ]]; do
   case $1 in
     --port|-p)
@@ -50,19 +64,6 @@ if [ -d "./liquibase_migrations" ]; then
 else
   MIGRATIONS_PATH="../liquibase_migrations"
 fi
-
-show_help() {
-  echo "Usage: $0 -p port -h host -P password [database_name|--help]"
-  echo "   or: $0 --port port --host host --password password [database_name|--help]"
-  echo "  -p, --port port         : PostgreSQL port"
-  echo "  -h, --host host         : PostgreSQL host"
-  echo "  -P, --password password : PostgreSQL password"
-  echo "  -l, --log-level level   : Liquibase log level (default: INFO)"
-  echo "  database_name           : The name of the database to migrate (optional)."
-  echo "                            If not provided, both postgres_auth and postgres_auth_dev will be migrated."
-  echo "  --help                  : Display this help message."
-  exit 0
-}
 
 migrate_db() {
   local db_name=$1
