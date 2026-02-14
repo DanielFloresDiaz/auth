@@ -37,11 +37,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.25.5
+          go-version-file: go.mod
       - name: Check gofmt
         run: |
           set -x
@@ -57,13 +57,10 @@ jobs:
       - name: Run static check
         run: |
           set -x
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-          go install github.com/nishanths/exhaustive/cmd/exhaustive@latest
           make static
       - name: Check gosec
         run: |
           set -x
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
           make sec
 
   test:
