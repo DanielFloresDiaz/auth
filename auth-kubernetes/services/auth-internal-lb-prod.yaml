@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-internal-lb-prod
+  namespace: solomon
+  labels:
+    service: auth-internal-lb-prod
+    environment: prod
+  annotations:
+    cloud.google.com/load-balancer-type: "Internal"
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 9999
+      protocol: TCP
+      name: http
+  selector:
+    app: auth
+    environment: prod
