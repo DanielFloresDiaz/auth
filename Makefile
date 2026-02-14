@@ -50,13 +50,9 @@ test: build ## Run tests.
 vet: # Vet the code
 	go vet $(CHECK_FILES)
 
-sec: check-gosec # Check for security vulnerabilities
-	gosec -quiet -exclude-generated $(CHECK_FILES)
-	gosec -quiet -tests -exclude-generated -exclude=G104 $(CHECK_FILES)
-
-check-gosec:
-	@command -v gosec >/dev/null 2>&1 \
-		|| go install github.com/securego/gosec/v2/cmd/gosec@latest
+sec: # Check for security vulnerabilities
+	go tool gosec -quiet -exclude-generated $(CHECK_FILES)
+	go tool gosec -quiet -tests -exclude-generated -exclude=G104 $(CHECK_FILES)
 
 unused: # Look for unused code
 	@echo "Unused code:"
