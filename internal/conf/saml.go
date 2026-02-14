@@ -1,6 +1,7 @@
 package conf
 
 import (
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -129,7 +130,10 @@ func (c *SAMLConfiguration) PopulateFields(externalURL string) error {
 }
 
 func (c *SAMLConfiguration) createCertificate(certTemplate *x509.Certificate) error {
-	certDer, err := x509.CreateCertificate(nil, certTemplate, certTemplate, c.RSAPublicKey, c.RSAPrivateKey)
+	if c.RSAPublicKey == nil || c.RSAPrivateKey == nil {
+		return errors.New("saml: RSA public and private keys must be set")
+	}
+	certDer, err := x509.CreateCertificate(rand.Reader, certTemplate, certTemplate, c.RSAPublicKey, c.RSAPrivateKey)
 	if err != nil {
 		return err
 	}

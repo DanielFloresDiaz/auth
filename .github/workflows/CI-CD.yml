@@ -41,7 +41,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.23.7
+          go-version: 1.25.5
       - name: Check gofmt
         run: |
           set -x
@@ -63,7 +63,7 @@ jobs:
       - name: Check gosec
         run: |
           set -x
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.21.4
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
           make sec
 
   test:
@@ -71,7 +71,7 @@ jobs:
     needs: [lint]
     strategy:
       matrix:
-        go-version: [1.23.7] # TODO: Update to latest Go version
+        go-version: [1.25.5]
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -170,7 +170,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.23.7
+          go-version: 1.25.5
       - name: Download coverage file
         uses: actions/download-artifact@v4
         with:
@@ -257,7 +257,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.23.7
+          go-version: 1.25.5
           
       # Extract version from GitHub tag
       - name: Extract version from Git tag

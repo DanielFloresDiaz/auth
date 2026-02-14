@@ -31,8 +31,8 @@ func (e *OAuthError) WithInternalError(err error) *OAuthError {
 }
 
 // WithInternalMessage adds internal message information to the error
-func (e *OAuthError) WithInternalMessage(fmtString string, args ...any) *OAuthError {
-	e.InternalMessage = fmt.Sprintf(fmtString, args...)
+func (e *OAuthError) WithInternalMessage(message string, args ...any) *OAuthError {
+	e.InternalMessage = fmt.Sprintf(message, args...)
 	return e
 }
 
@@ -54,40 +54,40 @@ type HTTPError struct {
 	ErrorID         string `json:"error_id,omitempty"`
 }
 
-func NewHTTPError(httpStatus int, errorCode ErrorCode, fmtString string, args ...any) *HTTPError {
+func NewHTTPError(httpStatus int, errorCode ErrorCode, message string, args ...any) *HTTPError {
 	return &HTTPError{
 		HTTPStatus: httpStatus,
 		ErrorCode:  errorCode,
-		Message:    fmt.Sprintf(fmtString, args...),
+		Message:    fmt.Sprintf(message, args...),
 	}
 }
 
-func NewBadRequestError(errorCode ErrorCode, fmtString string, args ...any) *HTTPError {
-	return NewHTTPError(http.StatusBadRequest, errorCode, fmtString, args...)
+func NewBadRequestError(errorCode ErrorCode, message string, args ...any) *HTTPError {
+	return NewHTTPError(http.StatusBadRequest, errorCode, message, args...)
 }
 
-func NewNotFoundError(errorCode ErrorCode, fmtString string, args ...any) *HTTPError {
-	return NewHTTPError(http.StatusNotFound, errorCode, fmtString, args...)
+func NewNotFoundError(errorCode ErrorCode, message string, args ...any) *HTTPError {
+	return NewHTTPError(http.StatusNotFound, errorCode, message, args...)
 }
 
-func NewForbiddenError(errorCode ErrorCode, fmtString string, args ...any) *HTTPError {
-	return NewHTTPError(http.StatusForbidden, errorCode, fmtString, args...)
+func NewForbiddenError(errorCode ErrorCode, message string, args ...any) *HTTPError {
+	return NewHTTPError(http.StatusForbidden, errorCode, message, args...)
 }
 
-func NewUnprocessableEntityError(errorCode ErrorCode, fmtString string, args ...any) *HTTPError {
-	return NewHTTPError(http.StatusUnprocessableEntity, errorCode, fmtString, args...)
+func NewUnprocessableEntityError(errorCode ErrorCode, message string, args ...any) *HTTPError {
+	return NewHTTPError(http.StatusUnprocessableEntity, errorCode, message, args...)
 }
 
-func NewTooManyRequestsError(errorCode ErrorCode, fmtString string, args ...any) *HTTPError {
-	return NewHTTPError(http.StatusTooManyRequests, errorCode, fmtString, args...)
+func NewTooManyRequestsError(errorCode ErrorCode, message string, args ...any) *HTTPError {
+	return NewHTTPError(http.StatusTooManyRequests, errorCode, message, args...)
 }
 
-func NewInternalServerError(fmtString string, args ...any) *HTTPError {
-	return NewHTTPError(http.StatusInternalServerError, ErrorCodeUnexpectedFailure, fmtString, args...)
+func NewInternalServerError(message string, args ...any) *HTTPError {
+	return NewHTTPError(http.StatusInternalServerError, ErrorCodeUnexpectedFailure, message, args...)
 }
 
-func NewConflictError(fmtString string, args ...any) *HTTPError {
-	return NewHTTPError(http.StatusConflict, ErrorCodeConflict, fmtString, args...)
+func NewConflictError(message string, args ...any) *HTTPError {
+	return NewHTTPError(http.StatusConflict, ErrorCodeConflict, message, args...)
 }
 
 func (e *HTTPError) Error() string {
@@ -116,7 +116,7 @@ func (e *HTTPError) WithInternalError(err error) *HTTPError {
 }
 
 // WithInternalMessage adds internal message information to the error
-func (e *HTTPError) WithInternalMessage(fmtString string, args ...any) *HTTPError {
-	e.InternalMessage = fmt.Sprintf(fmtString, args...)
+func (e *HTTPError) WithInternalMessage(message string, args ...any) *HTTPError {
+	e.InternalMessage = fmt.Sprintf(message, args...)
 	return e
 }

@@ -56,7 +56,7 @@ sec: check-gosec # Check for security vulnerabilities
 
 check-gosec:
 	@command -v gosec >/dev/null 2>&1 \
-		|| go install github.com/securego/gosec/v2/cmd/gosec@v2.21.4
+		|| go install github.com/securego/gosec/v2/cmd/gosec@latest
 
 unused: | check-staticcheck # Look for unused code
 	@echo "Unused code:"

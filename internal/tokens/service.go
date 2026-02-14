@@ -166,7 +166,7 @@ func (s *Service) RefreshTokenGrant(ctx context.Context, db *storage.Connection,
 			if models.IsNotFoundError(err) {
 				return nil, apierrors.NewBadRequestError(apierrors.ErrorCodeRefreshTokenNotFound, "Invalid Refresh Token: Refresh Token Not Found")
 			}
-			return nil, apierrors.NewInternalServerError(err.Error())
+			return nil, apierrors.NewInternalServerError("%s", err.Error())
 		}
 
 		responseHeaders.Set("sb-auth-user-id", user.ID.String())
@@ -243,7 +243,7 @@ func (s *Service) RefreshTokenGrant(ctx context.Context, db *storage.Connection,
 					retry = true
 					return terr
 				}
-				return apierrors.NewInternalServerError(terr.Error())
+				return apierrors.NewInternalServerError("%s", terr.Error())
 			}
 
 			// Validate OAuth client consistency between session and current request
@@ -277,7 +277,7 @@ func (s *Service) RefreshTokenGrant(ctx context.Context, db *storage.Connection,
 					retry = true
 					return terr
 				} else if terr != nil {
-					return apierrors.NewInternalServerError(terr.Error())
+					return apierrors.NewInternalServerError("%s", terr.Error())
 				}
 
 				sessionTag := session.DetermineTag(config.Sessions.Tags)
@@ -327,7 +327,7 @@ func (s *Service) RefreshTokenGrant(ctx context.Context, db *storage.Connection,
 				if token.Revoked {
 					activeRefreshToken, terr := session.FindCurrentlyActiveRefreshToken(tx)
 					if terr != nil && !models.IsNotFoundError(terr) {
-						return apierrors.NewInternalServerError(terr.Error())
+						return apierrors.NewInternalServerError("%s", terr.Error())
 					}
 
 					if activeRefreshToken != nil && activeRefreshToken.Parent.String() == token.Token {
@@ -351,7 +351,7 @@ func (s *Service) RefreshTokenGrant(ctx context.Context, db *storage.Connection,
 							if config.Security.RefreshTokenRotationEnabled {
 								// Revoke all tokens in token family
 								if err := models.RevokeTokenFamily(tx, token); err != nil {
-									return apierrors.NewInternalServerError(err.Error())
+									return apierrors.NewInternalServerError("%s", err.Error())
 								}
 							}
 
