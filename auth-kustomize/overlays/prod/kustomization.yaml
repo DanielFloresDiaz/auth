@@ -22,5 +22,6 @@ configMapGenerator:
       - API_EXTERNAL_URL=https://solomon-auth.com/
       - GOTRUE_SITE_URL=https://solomon-auth.com/
       - GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://solomon-auth.com/auth/callback
+      - GOTRUE_URI_ALLOW_LIST=http://localhost:5173/*,https://to-be-added-real-domain-9889.com/*
 
 

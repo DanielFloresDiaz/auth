@@ -209,7 +209,12 @@ spec:
                 configMapKeyRef:
                   name: auth-generated-config
                   key: GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI
-            
+            - name: GOTRUE_URI_ALLOW_LIST
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-generated-config
+                  key: GOTRUE_URI_ALLOW_LIST
+                  
             # Security Configuration
             - name: GOTRUE_LOG_LEVEL
               valueFrom:
