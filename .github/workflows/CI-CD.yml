@@ -63,7 +63,7 @@ jobs:
       - name: Check gosec
         run: |
           set -x
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.21.4
           make sec
 
   test:
@@ -437,6 +437,7 @@ jobs:
           
           # Apply environment specific services
           kubectl apply -f auth-kubernetes/services/service-$ENV.yaml
+          kubectl apply -f auth-kubernetes/services/auth-internal-lb-$ENV.yaml
 
           # Remove "v" prefix if present for Docker image tag
           DOCKER_TAG=${TAG#v}
@@ -493,6 +494,7 @@ jobs:
           
           # Apply environment specific services
           kubectl apply -f auth-kubernetes/services/service-$ENV.yaml
+          kubectl apply -f auth-kubernetes/services/auth-internal-lb-$ENV.yaml
 
           # Remove "v" prefix if present for Docker image tag
           DOCKER_TAG=${TAG#v}
