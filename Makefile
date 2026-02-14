@@ -58,31 +58,20 @@ check-gosec:
 	@command -v gosec >/dev/null 2>&1 \
 		|| go install github.com/securego/gosec/v2/cmd/gosec@latest
 
-unused: | check-staticcheck # Look for unused code
+unused: # Look for unused code
 	@echo "Unused code:"
-	staticcheck -checks U1000 $(CHECK_FILES)
+	go tool staticcheck -checks U1000 $(CHECK_FILES)
 	@echo
 	@echo "Code used only in _test.go (do move it in those files):"
-	staticcheck -checks U1000 -tests=false $(CHECK_FILES)
+	go tool staticcheck -checks U1000 -tests=false $(CHECK_FILES)
 
-static: | check-staticcheck check-exhaustive
-	staticcheck ./...
-	exhaustive ./...
+static:
+	go tool staticcheck ./...
+	go tool exhaustive ./...
 
-check-staticcheck:
-	@command -v staticcheck >/dev/null 2>&1 \
-		|| go install honnef.co/go/tools/cmd/staticcheck@latest
-
-check-exhaustive:
-	@command -v exhaustive >/dev/null 2>&1 \
-		|| go install github.com/nishanths/exhaustive/cmd/exhaustive@latest
-
-generate: | check-oapi-codegen
+generate:
+	go tool oapi-codegen ./...
 	go generate ./...
-
-check-oapi-codegen:
-	@command -v oapi-codegen >/dev/null 2>&1 \
-		|| go install github.com/deepmap/oapi-codegen/cmd/oapi-codegen@latest
 
 dev: ## Run the development containers
 	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) up

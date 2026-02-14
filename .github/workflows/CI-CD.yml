@@ -57,9 +57,6 @@ jobs:
       - name: Run static check
         run: |
           set -x
-          # Pre-install tools with Go 1.25 compatibility workaround for exhaustive
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-          (mkdir -p /tmp/exhaustive && cd /tmp/exhaustive && go mod init workaround && go get github.com/nishanths/exhaustive/cmd/exhaustive@latest && go get golang.org/x/tools@latest && go mod tidy && go install github.com/nishanths/exhaustive/cmd/exhaustive)
           make static
       - name: Check gosec
         run: |
