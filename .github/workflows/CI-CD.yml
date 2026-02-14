@@ -71,7 +71,7 @@ jobs:
     needs: [lint]
     strategy:
       matrix:
-        go-version: [1.23.7]
+        go-version: [1.23.7] # TODO: Update to latest Go version
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -413,11 +413,11 @@ jobs:
       
       - name: Ensure base Kubernetes resources exist
         run: |
-          kubectl apply -f auth-kubernetes/serviceaccount.yaml
-          kubectl apply -f auth-kubernetes/app-secrets.yaml
-          kubectl apply -f auth-kubernetes/frontend-config.yaml
-          kubectl apply -f auth-kubernetes/managed-cert.yaml
-          kubectl apply -f auth-kubernetes/auth-network-policy.yaml
+          kubectl apply -f k8s/serviceaccount.yaml
+          kubectl apply -f k8s/app-secrets.yaml
+          kubectl apply -f k8s/frontend-config.yaml
+          kubectl apply -f k8s/managed-cert.yaml
+          kubectl apply -f k8s/auth-network-policy.yaml
       
       - name: Generate GHCR Secret
         run: python scripts/k8s/generate_ghcr_secret.py -u ${{ github.actor }} -t ${{ secrets.GHCR_PAT }} -n solomon --apply
@@ -436,14 +436,14 @@ jobs:
           TAG=${{ steps.deployment_env.outputs.tag }}
           
           # Apply environment specific services
-          kubectl apply -f auth-kubernetes/services/service-$ENV.yaml
-          kubectl apply -f auth-kubernetes/services/auth-internal-lb-$ENV.yaml
+          kubectl apply -f k8s/services/service-$ENV.yaml
+          kubectl apply -f k8s/services/auth-internal-lb-$ENV.yaml
 
           # Remove "v" prefix if present for Docker image tag
           DOCKER_TAG=${TAG#v}
           
           # Create a kustomization overlay to set the image tag
-          cd auth-kustomize/overlays/$ENV
+          cd kustomize/overlays/$ENV
           
           # Force lowercase for image name to match GHCR and existing manifests
           REPO_LOWER=$(echo "${{ github.repository }}" | tr 'A-Z' 'a-z')
@@ -493,14 +493,14 @@ jobs:
           TAG=${{ steps.deployment_env.outputs.tag }}
           
           # Apply environment specific services
-          kubectl apply -f auth-kubernetes/services/service-$ENV.yaml
-          kubectl apply -f auth-kubernetes/services/auth-internal-lb-$ENV.yaml
+          kubectl apply -f k8s/services/service-$ENV.yaml
+          kubectl apply -f k8s/services/auth-internal-lb-$ENV.yaml
 
           # Remove "v" prefix if present for Docker image tag
           DOCKER_TAG=${TAG#v}
           
           # Create a kustomization overlay to set the image tag
-          cd auth-kustomize/overlays/$ENV
+          cd kustomize/overlays/$ENV
           
           # Force lowercase for image name to match GHCR and existing manifests
           REPO_LOWER=$(echo "${{ github.repository }}" | tr 'A-Z' 'a-z')

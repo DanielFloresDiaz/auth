@@ -109,11 +109,11 @@ docker-clean: ## Remove the development containers and volumes
 format:
 	gofmt -s -w .
 
-kapply: ## Apply all YAML files in auth-kubernetes directory recursively.
-	kubectl apply -f auth-kubernetes --recursive
+kapply: ## Apply all YAML files in k8s directory recursively.
+	kubectl apply -f k8s --recursive
 
-kustomize-dev: ## Apply kustomization in auth-kustomize/overlays/dev
-	kubectl apply -k auth-kustomize/overlays/dev
+kustomize-dev: ## Apply kustomization in kustomize/overlays/dev
+	kubectl apply -k kustomize/overlays/dev
 
-kustomize-prod: ## Apply kustomization in auth-kustomize/overlays/prod
-	kubectl apply -k auth-kustomize/overlays/prod
+kustomize-prod: ## Apply kustomization in kustomize/overlays/prod
+	kubectl apply -k kustomize/overlays/prod

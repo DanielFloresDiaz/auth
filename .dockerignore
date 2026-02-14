@@ -25,8 +25,8 @@ coverage.out
 /.gcloud/
 
 # Kubernetes related
-/auth-kubernetes/
-/auth-kustomize/
+/k8s/
+/kustomize/
 /k8s-secrets/
 
 # Documentation
