@@ -57,6 +57,9 @@ jobs:
       - name: Run static check
         run: |
           set -x
+          # Pre-install tools with Go 1.25 compatibility workaround for exhaustive
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          (mkdir -p /tmp/exhaustive && cd /tmp/exhaustive && go mod init workaround && go get github.com/nishanths/exhaustive/cmd/exhaustive@latest && go get golang.org/x/tools@latest && go install github.com/nishanths/exhaustive/cmd/exhaustive)
           make static
       - name: Check gosec
         run: |
@@ -88,7 +91,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go-version }}
       - name: Init Database
@@ -165,7 +168,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: 1.25.5
       - name: Download coverage file
@@ -252,7 +255,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: 1.25.5
           
