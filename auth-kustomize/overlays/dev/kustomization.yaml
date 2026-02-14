@@ -26,5 +26,5 @@ configMapGenerator:
       - DB_NAME=postgres_auth_dev
       - API_EXTERNAL_URL=https://dev.solomon-auth.com/
       - GOTRUE_SITE_URL=https://dev.solomon-auth.com/
-      - GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://dev.solomon-auth.com/auth/callback
-      - GOTRUE_URI_ALLOW_LIST=http://localhost:5173/*
+      - GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://dev.solomon-auth.com/callback
+      - GOTRUE_URI_ALLOW_LIST=http://localhost:5173/**

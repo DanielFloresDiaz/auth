@@ -20,7 +20,7 @@ configMapGenerator:
       - GOTRUE_API_HOST=0.0.0.0
       - PORT=9999
       - DB_USER=auth_admin
-      - GOTRUE_DISABLE_SIGNUP=true
+      - GOTRUE_DISABLE_SIGNUP=false
       - GOTRUE_EXTERNAL_EMAIL_ENABLED=false
       - GOTRUE_EXTERNAL_PHONE_ENABLED=false
       - GOTRUE_EXTERNAL_IOS_BUNDLE_ID=com.supabase.auth
