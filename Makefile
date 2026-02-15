@@ -2,7 +2,7 @@
 CHECK_FILES?=./...
 
 ifdef RELEASE_VERSION
-	VERSION=$(RELEASE_VERSION)
+	VERSION=v$(RELEASE_VERSION)
 else
 	VERSION=$(shell git describe --tags)
 endif
