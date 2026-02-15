@@ -241,6 +241,8 @@ jobs:
     permissions:
       contents: write
       packages: write  # Required for pushing to GHCR
+    env:
+      RELEASE_VERSION: ${{ github.ref_name }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -249,31 +251,11 @@ jobs:
         with:
           go-version: 1.25.5
           
-      # Extract version from GitHub tag
-      - name: Extract version from Git tag
-        id: tag_version
-        run: |
-          # Extract the version string from GITHUB_REF (refs/tags/v1.2.3 or refs/tags/1.2.3)
-          TAG=${GITHUB_REF#refs/tags/}
-          VERSION=$TAG
-          # Check if this is a dev tag
-          if [[ $TAG == dev* ]]; then
-            IS_DEV_TAG="true"
-            VERSION="dev"  # Fixed tag for all development builds
-          else
-            IS_DEV_TAG="false"
-            VERSION=$TAG
-          fi
-          
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "is_dev_tag=$IS_DEV_TAG" >> $GITHUB_OUTPUT
-          echo "Extracted version: $VERSION from tag $TAG (dev tag: $IS_DEV_TAG)"
-          
       - name: Build binaries
         run: |
-          CGO_ENABLED=0 go build -ldflags "-X github.com/supabase/auth/internal/utilities.Version=${GITHUB_REF#refs/tags/}" -o auth
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/supabase/auth/internal/utilities.Version=${GITHUB_REF#refs/tags/}" -o auth-linux-amd64
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-X github.com/supabase/auth/internal/utilities.Version=${GITHUB_REF#refs/tags/}" -o auth-linux-arm64
+          CGO_ENABLED=0 go build -ldflags "-X github.com/supabase/auth/internal/utilities.Version=${{ env.RELEASE_VERSION }}" -o auth
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/supabase/auth/internal/utilities.Version=${{ env.RELEASE_VERSION }}" -o auth-linux-amd64
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-X github.com/supabase/auth/internal/utilities.Version=${{ env.RELEASE_VERSION }}" -o auth-linux-arm64
       
       # Docker build and push steps
       - name: Extract metadata (tags, labels) for Docker
@@ -283,12 +265,12 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             # For dev tags, use a single fixed "dev" tag
-            ${{ steps.tag_version.outputs.is_dev_tag == 'true' && format('type=raw,value={0}', steps.tag_version.outputs.version) || '' }}
+            ${{ startsWith(github.ref_name, 'dev') && 'type=raw,value=dev' || '' }}
             # For production releases, use semantic versioning tags
-            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{version}}' || '' }}
-            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{major}}.{{minor}}' || '' }}
-            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{major}}' || '' }}
-            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=raw,value=latest' || '' }}
+            ${{ !startsWith(github.ref_name, 'dev') && 'type=semver,pattern={{version}}' || '' }}
+            ${{ !startsWith(github.ref_name, 'dev') && 'type=semver,pattern={{major}}.{{minor}}' || '' }}
+            ${{ !startsWith(github.ref_name, 'dev') && 'type=semver,pattern={{major}}' || '' }}
+            ${{ !startsWith(github.ref_name, 'dev') && 'type=raw,value=latest' || '' }}
             # Always include the commit SHA
             type=sha,format=short
 
@@ -313,11 +295,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            RELEASE_VERSION=${{ steps.tag_version.outputs.version }}
+            RELEASE_VERSION=${{ env.RELEASE_VERSION }}
       
       # Skip release creation for dev tags
       - name: Create Release
-        if: steps.tag_version.outputs.is_dev_tag != 'true'
+        if: ${{ !startsWith(github.ref_name, 'dev') }}
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
