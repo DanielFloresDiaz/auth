@@ -14,8 +14,8 @@ RUN make deps
 # Building stuff
 COPY . /go/src/github.com/supabase/auth
 
-# Make sure you change the RELEASE_VERSION value before publishing an image.
-RUN RELEASE_VERSION=unspecified make build
+ARG RELEASE_VERSION=unspecified
+RUN make build
 
 # Always use alpine:3 so the latest version is used. This will keep CA certs more up to date.
 FROM alpine:3
