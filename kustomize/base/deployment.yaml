@@ -59,7 +59,6 @@ spec:
               mountPath: "/env-vars"
       containers:
         - name: auth-container
-          image: ghcr.io/danielfloresdiaz/auth:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 9999
