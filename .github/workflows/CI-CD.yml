@@ -86,7 +86,7 @@ jobs:
           --health-retries 5
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -163,7 +163,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -185,30 +185,23 @@ jobs:
           sed -i '/^github.com\/supabase\/auth\/docs/d' coverage.out
           sed -i '/^github.com\/supabase\/auth\/main/d' coverage.out
       
-      - name: Generate coverage XML
+      - name: Generate coverage reports
         run: |
           go tool cover -html=coverage.out -o coverage.html
-          go install github.com/axw/gocov/gocov@latest
-          go install github.com/AlekSi/gocov-xml@latest
-          gocov convert coverage.out | gocov-xml > coverage.xml
 
-      - name: Upload coverage xml
+      - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-xml
-          path: coverage.xml
-
-      - name: Upload coverage html
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-html
-          path: coverage.html
+          name: coverage-reports
+          path: |
+            coverage.out
+            coverage.html
       
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          file: ./coverage.xml
+          files: ./coverage.out
           fail_ci_if_error: true
           verbose: true
       
@@ -250,7 +243,7 @@ jobs:
       packages: write  # Required for pushing to GHCR
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -354,7 +347,7 @@ jobs:
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       
       - name: Set up kubectl
         uses: azure/setup-kubectl@v3
