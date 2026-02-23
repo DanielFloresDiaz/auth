@@ -427,7 +427,6 @@ jobs:
           
           # Apply environment specific services
           kubectl apply -f k8s/services/service-$ENV.yaml
-          kubectl apply -f k8s/services/auth-internal-lb-$ENV.yaml
 
           # Remove "v" prefix if present for Docker image tag
           DOCKER_TAG=${TAG#v}
@@ -484,7 +483,6 @@ jobs:
           
           # Apply environment specific services
           kubectl apply -f k8s/services/service-$ENV.yaml
-          kubectl apply -f k8s/services/auth-internal-lb-$ENV.yaml
 
           # Remove "v" prefix if present for Docker image tag
           DOCKER_TAG=${TAG#v}
