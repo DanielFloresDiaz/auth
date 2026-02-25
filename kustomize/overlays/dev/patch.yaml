@@ -16,16 +16,16 @@ spec:
         - name: auth-container
           resources:
             requests:
-              cpu: "50m"
-              memory: "128Mi"
+              cpu: "20m"
+              memory: "16Mi"
             limits:
-              cpu: "200m"
-              memory: "256Mi"
+              cpu: "40m"
+              memory: "32Mi"
         - name: cloudsql-proxy
           resources:
             requests:
-              cpu: "25m"
-              memory: "64Mi"
+              cpu: "5m"
+              memory: "16Mi"
             limits:
-              cpu: "50m"
-              memory: "128Mi"
+              cpu: "10m"
+              memory: "64Mi"
