@@ -6,7 +6,3 @@ metadata:
 spec:
   securityPolicy:
     name: "auth-security-policy" # This policy must be created in Google Cloud Console or via Terraform
-  customRequestHeaders:
-    headers:
-    - headerName: "X-Auth-Version"
-      headerValue: "v1.0.0"
