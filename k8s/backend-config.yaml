@@ -1,0 +1,12 @@
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: auth-backend-config
+  namespace: solomon
+spec:
+  securityPolicy:
+    name: "auth-security-policy" # This policy must be created in Google Cloud Console or via Terraform
+  customRequestHeaders:
+    headers:
+    - headerName: "X-Auth-Version"
+      headerValue: "v1.0.0"

@@ -3,6 +3,8 @@ kind: Service
 metadata:
   name: auth-service-prod
   namespace: solomon
+  annotations:
+    cloud.google.com/backend-config: '{"default": "auth-backend-config"}'
   labels:
     service: auth-service-prod
     environment: prod
