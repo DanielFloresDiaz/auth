@@ -2,30 +2,34 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - ../../base
-  - ingress.yaml
-  - auth-vpa.yaml
+- ../../base
+- ingress.yaml
+- auth-vpa.yaml
 
 namespace: solomon
 
 namePrefix: dev-
 
 patches:
-  - path: patch.yaml
+- path: patch.yaml
 
 labels:
-- pairs:
+- includeSelectors: true
+  pairs:
     environment: dev
     tier: dev
-  includeSelectors: true
 
 configMapGenerator:
-  - name: auth-generated-config
-    behavior: merge
-    literals:
-      - GOTRUE_LOG_LEVEL=debug
-      - DB_NAME=postgres_auth_dev
-      - API_EXTERNAL_URL=https://dev.solomon-auth.com/
-      - GOTRUE_SITE_URL=https://dev.solomon-auth.com/
-      - GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://dev.solomon-auth.com/callback
-      - GOTRUE_URI_ALLOW_LIST=http://localhost:5173/auth/callback,https://dev.insidec.org/auth/callback
+- behavior: merge
+  literals:
+  - GOTRUE_LOG_LEVEL=debug
+  - DB_NAME=postgres_auth_dev
+  - API_EXTERNAL_URL=https://dev.solomon-auth.com/
+  - GOTRUE_SITE_URL=https://dev.solomon-auth.com/
+  - GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://dev.solomon-auth.com/callback
+  - GOTRUE_URI_ALLOW_LIST=http://localhost:5173/auth/callback,https://dev.insidec.org/auth/callback
+  name: auth-generated-config
+images:
+- name: ghcr.io/danielfloresdiaz/auth
+  newName: ghcr.io/danielfloresdiaz/auth
+  newTag: 0.0.2
