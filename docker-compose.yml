@@ -31,7 +31,7 @@ services:
       POSTGRES_DB: postgres
 
   liquibase:
-    image: liquibase/liquibase
+    image: liquibase/liquibase:4.32
     depends_on:
       - auth
     volumes:
