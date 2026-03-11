@@ -15,7 +15,7 @@ metadata:
 spec:
   ingressClassName: "gce"
   rules:
-  - host: dev.solomon-auth.com
+  - host: dev.solomonauth.com
     http:
       paths:
         - path: /*

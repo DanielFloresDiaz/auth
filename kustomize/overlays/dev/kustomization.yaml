@@ -24,9 +24,9 @@ configMapGenerator:
   literals:
   - GOTRUE_LOG_LEVEL=debug
   - DB_NAME=postgres_auth_dev
-  - API_EXTERNAL_URL=https://dev.solomon-auth.com/
-  - GOTRUE_SITE_URL=https://dev.solomon-auth.com/
-  - GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://dev.solomon-auth.com/callback
+  - API_EXTERNAL_URL=https://dev.solomonauth.com/
+  - GOTRUE_SITE_URL=https://dev.solomonauth.com/
+  - GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://dev.solomonauth.com/callback
   - GOTRUE_URI_ALLOW_LIST=http://localhost:5173/auth/callback,https://dev.insidec.org/auth/callback
   name: auth-generated-config
 images:

@@ -335,7 +335,7 @@ spec:
             - "--structured-logs"
             - "--port=5432"
             - "--address=0.0.0.0"
-            - "solomon-481015:europe-southwest1:solomon"
+            - "project-66012d22-0833-4897-a6e:europe-southwest1:solomon"
           resources:
             requests:
               cpu: "10m"
