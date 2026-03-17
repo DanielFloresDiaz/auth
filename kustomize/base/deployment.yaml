@@ -338,11 +338,11 @@ spec:
             - "project-66012d22-0833-4897-a6e:europe-southwest1:solomon"
           resources:
             requests:
-              cpu: "10m"
-              memory: "16Mi"
+              cpu: "150m"
+              memory: "64Mi"
             limits:
-              cpu: "100m"
-              memory: "32Mi"
+              cpu: "250m"
+              memory: "128Mi"
           ports:
             - containerPort: 5432
           securityContext:
