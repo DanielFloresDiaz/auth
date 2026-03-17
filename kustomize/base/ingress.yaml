@@ -15,13 +15,24 @@ metadata:
 spec:
   ingressClassName: "gce"
   rules:
-  - host: dev.solomonauth.com
+  - host: solomonauth.com
     http:
       paths:
         - path: /*
           pathType: ImplementationSpecific
           backend:
             service:
-              name: auth-service-dev
+              name: auth-service-prod
               port:
                 number: 9999
+  # Note: Uncomment the following rule when the first production version is implemented
+  # - host: dev.solomonauth.com
+  #   http:
+  #     paths:
+  #       - path: /*
+  #         pathType: ImplementationSpecific
+  #         backend:
+  #           service:
+  #             name: auth-service-dev
+  #             port:
+  #               number: 9999

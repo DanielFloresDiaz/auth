@@ -5,6 +5,7 @@ namespace: solomon
 
 resources:
   - deployment.yaml
+  - ingress.yaml
   
 configMapGenerator:
   - name: auth-generated-config
