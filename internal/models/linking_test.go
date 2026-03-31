@@ -1,8 +1,11 @@
 package models
 
 import (
+	"fmt"
+	"net/url"
 	"testing"
 
+	"github.com/gobuffalo/pop/v6"
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -278,6 +281,72 @@ func (ts *AccountLinkingTestSuite) TestLinkingScenarios() {
 		})
 	}
 
+}
+
+// TestSameIdentityAcrossDifferentProjects verifies that the same external identity
+// (e.g. one Google account) can sign in to two different projects without hitting
+// a duplicate-key error on the identities table.
+func (ts *AccountLinkingTestSuite) TestSameIdentityAcrossDifferentProjects() {
+	// Create a second project using the postgres superuser (same as InitializeTestDatabase).
+	projectBID := uuid.Must(uuid.NewV4())
+	superuserURL := ts.config.DB.URL
+	if u, err := url.Parse(ts.config.DB.URL); err == nil {
+		u.User = url.UserPassword("postgres", "root")
+		superuserURL = u.String()
+	}
+	superuserDB, err := pop.NewConnection(&pop.ConnectionDetails{
+		Dialect: ts.config.DB.Driver,
+		URL:     superuserURL,
+	})
+	require.NoError(ts.T(), err)
+	require.NoError(ts.T(), superuserDB.Open())
+	defer superuserDB.Close()
+	setupDB := &storage.Connection{Connection: superuserDB}
+
+	err = setupDB.RawQuery(
+		fmt.Sprintf("INSERT INTO auth.projects (id, name) VALUES ('%s', 'test_project_b_%s')", projectBID, projectBID),
+	).Exec()
+	require.NoError(ts.T(), err)
+
+	const googleSub = "google-oauth2|12345678"
+
+	// userA signs in to project A (ts.ProjectID).
+	userA, err := NewUser("", "user@gmail.com", "", "authenticated", nil, uuid.Nil, ts.ProjectID)
+	require.NoError(ts.T(), err)
+	require.NoError(ts.T(), ts.db.Create(userA, "organization_id", "organization_role"))
+	identityA, err := NewIdentity(userA, "google", map[string]interface{}{
+		"sub":   googleSub,
+		"email": "user@gmail.com",
+	})
+	require.NoError(ts.T(), err)
+	require.NoError(ts.T(), ts.db.Create(identityA), "should insert identity for project A without error")
+
+	// userB signs in to project B using the exact same Google account.
+	userB, err := NewUser("", "user@gmail.com", "", "authenticated", nil, uuid.Nil, projectBID)
+	require.NoError(ts.T(), err)
+	require.NoError(ts.T(), ts.db.Create(userB, "organization_id", "organization_role"))
+	identityB, err := NewIdentity(userB, "google", map[string]interface{}{
+		"sub":   googleSub,
+		"email": "user@gmail.com",
+	})
+	require.NoError(ts.T(), err)
+	require.NoError(ts.T(), ts.db.Create(identityB), "same Google account must be usable in a different project")
+
+	// DetermineAccountLinking for project A should find userA.
+	decisionA, err := DetermineAccountLinking(ts.db, ts.config, []provider.Email{
+		{Email: "user@gmail.com", Verified: true, Primary: true},
+	}, ts.config.JWT.Aud, "google", googleSub, uuid.Nil, ts.ProjectID)
+	require.NoError(ts.T(), err)
+	require.Equal(ts.T(), AccountExists, decisionA.Decision)
+	require.Equal(ts.T(), userA.ID, decisionA.User.ID)
+
+	// DetermineAccountLinking for project B should find userB, not userA.
+	decisionB, err := DetermineAccountLinking(ts.db, ts.config, []provider.Email{
+		{Email: "user@gmail.com", Verified: true, Primary: true},
+	}, ts.config.JWT.Aud, "google", googleSub, uuid.Nil, projectBID)
+	require.NoError(ts.T(), err)
+	require.Equal(ts.T(), AccountExists, decisionB.Decision)
+	require.Equal(ts.T(), userB.ID, decisionB.User.ID)
 }
 
 func (ts *AccountLinkingTestSuite) TestMultipleAccounts() {

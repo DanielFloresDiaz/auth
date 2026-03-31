@@ -228,3 +228,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS users_phone_project_id_org_null_unique
 ON "auth".users (phone, project_id)
 WHERE organization_id IS NULL;
 --rollback DROP INDEX IF EXISTS "auth".users_email_project_id_org_null_unique;
+
+--changeset solomon.auth:21 labels:auth context:auth
+--comment: Replace global identities unique constraint with project-scoped one to allow the same external identity to sign in to multiple projects
+ALTER TABLE "auth".identities DROP CONSTRAINT IF EXISTS identities_provider_id_provider_unique;
+ALTER TABLE "auth".identities ADD CONSTRAINT identities_provider_id_provider_project_id_unique UNIQUE (provider_id, provider, project_id);
+--rollback ALTER TABLE "auth".identities DROP CONSTRAINT IF EXISTS identities_provider_id_provider_project_id_unique;
+--rollback ALTER TABLE "auth".identities ADD CONSTRAINT identities_provider_id_provider_unique UNIQUE (provider_id, provider);
