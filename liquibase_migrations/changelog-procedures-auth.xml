@@ -23,26 +23,26 @@
         END;
         $$;
 
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".api_keys FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".projects FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".organizations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".smtp_configs_organizations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".smtp_configs_projects FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".organization_roles_permissions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".projects_tiers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".refresh_tokens FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".instances FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".identities FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".sessions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".mfa_factors FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".mfa_amr_claims FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".sso_providers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".sso_domains FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".saml_providers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".saml_relay_states FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".flow_state FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".one_time_tokens FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".api_keys FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".projects FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".organizations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".smtp_configs_organizations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".smtp_configs_projects FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".organization_roles_permissions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".projects_tiers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".refresh_tokens FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".instances FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".identities FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".sessions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".mfa_factors FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".mfa_amr_claims FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".sso_providers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".sso_domains FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".saml_providers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".saml_relay_states FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".flow_state FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".one_time_tokens FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
     </createProcedure>
     <rollback>
@@ -162,12 +162,12 @@
         END;
         $$ LANGUAGE plpgsql;
 
-        CREATE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION prevent_change_organization_project();
-        CREATE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."flow_state" FOR EACH ROW EXECUTE FUNCTION prevent_change_organization_project();
-        CREATE TRIGGER prevent_set_project_id BEFORE UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION prevent_set_project_id();
-        CREATE TRIGGER update_organization_role BEFORE UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION update_organization_role();
-        CREATE TRIGGER prevent_organization_project_null BEFORE INSERT OR UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION prevent_organization_project_null();
-        CREATE TRIGGER prevent_organization_project_null BEFORE INSERT OR UPDATE ON "auth"."flow_state" FOR EACH ROW EXECUTE FUNCTION prevent_organization_project_null();
+        CREATE OR REPLACE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION prevent_change_organization_project();
+        CREATE OR REPLACE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."flow_state" FOR EACH ROW EXECUTE FUNCTION prevent_change_organization_project();
+        CREATE OR REPLACE TRIGGER prevent_set_project_id BEFORE UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION prevent_set_project_id();
+        CREATE OR REPLACE TRIGGER update_organization_role BEFORE UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION update_organization_role();
+        CREATE OR REPLACE TRIGGER prevent_organization_project_null BEFORE INSERT OR UPDATE ON "auth"."users" FOR EACH ROW EXECUTE FUNCTION prevent_organization_project_null();
+        CREATE OR REPLACE TRIGGER prevent_organization_project_null BEFORE INSERT OR UPDATE ON "auth"."flow_state" FOR EACH ROW EXECUTE FUNCTION prevent_organization_project_null();
     </createProcedure>
     <rollback>
         DROP FUNCTION prevent_change_organization_project();
@@ -198,7 +198,7 @@
         END;
         $$ LANGUAGE plpgsql;
 
-        CREATE TRIGGER trigger_create_default_tier
+        CREATE OR REPLACE TRIGGER trigger_create_default_tier
         AFTER INSERT ON "auth".projects
         FOR EACH ROW
         EXECUTE FUNCTION create_project_default_tier();
@@ -230,7 +230,7 @@
         END;
         $$ LANGUAGE plpgsql;
 
-        CREATE TRIGGER prevent_admin_fkey_change BEFORE UPDATE ON "auth"."organizations" FOR EACH ROW EXECUTE FUNCTION prevent_admin_fkey_change();
+        CREATE OR REPLACE TRIGGER prevent_admin_fkey_change BEFORE UPDATE ON "auth"."organizations" FOR EACH ROW EXECUTE FUNCTION prevent_admin_fkey_change();
     </createProcedure>
     <rollback>
         DROP FUNCTION prevent_admin_fkey_change();
@@ -260,7 +260,7 @@
         END;
         $$ LANGUAGE plpgsql;
 
-        CREATE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_set_both_organization_and_project();
+        CREATE OR REPLACE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_set_both_organization_and_project();
     </createProcedure>
     <rollback>
         DROP FUNCTION prevent_set_both_organization_and_project();
@@ -293,9 +293,9 @@
         END;
         $$ LANGUAGE plpgsql;
 
-        CREATE TRIGGER trigger_set_uuid BEFORE INSERT ON "auth"."api_keys" FOR EACH ROW EXECUTE FUNCTION set_uuid();
-        CREATE TRIGGER trigger_set_uuid BEFORE INSERT ON "auth"."projects" FOR EACH ROW EXECUTE FUNCTION set_uuid();
-        CREATE TRIGGER trigger_set_uuid BEFORE INSERT ON "auth"."organizations" FOR EACH ROW EXECUTE FUNCTION set_uuid();
+        CREATE OR REPLACE TRIGGER trigger_set_uuid BEFORE INSERT ON "auth"."api_keys" FOR EACH ROW EXECUTE FUNCTION set_uuid();
+        CREATE OR REPLACE TRIGGER trigger_set_uuid BEFORE INSERT ON "auth"."projects" FOR EACH ROW EXECUTE FUNCTION set_uuid();
+        CREATE OR REPLACE TRIGGER trigger_set_uuid BEFORE INSERT ON "auth"."organizations" FOR EACH ROW EXECUTE FUNCTION set_uuid();
     </createProcedure>
     <rollback>
         DROP FUNCTION set_uuid();
@@ -310,9 +310,9 @@
            dbms="postgresql">
         DROP TRIGGER prevent_change_organization_project ON "auth"."identities";
         DROP FUNCTION prevent_set_both_organization_and_project();
-        CREATE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_change_organization_project();
-        CREATE TRIGGER prevent_set_project_id BEFORE UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_set_project_id();
-        CREATE TRIGGER prevent_organization_project_null BEFORE INSERT OR UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_organization_project_null();
+        CREATE OR REPLACE TRIGGER prevent_change_organization_project BEFORE UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_change_organization_project();
+        CREATE OR REPLACE TRIGGER prevent_set_project_id BEFORE UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_set_project_id();
+        CREATE OR REPLACE TRIGGER prevent_organization_project_null BEFORE INSERT OR UPDATE ON "auth"."identities" FOR EACH ROW EXECUTE FUNCTION prevent_organization_project_null();
     </createProcedure>
     <rollback>
         DROP TRIGGER prevent_change_organization_project ON "auth"."identities";
@@ -331,7 +331,7 @@
         END;
         $$ LANGUAGE plpgsql;
 
-        CREATE TRIGGER trigger_enforce_free_tier
+        CREATE OR REPLACE TRIGGER trigger_enforce_free_tier
         BEFORE INSERT ON "auth".organizations_tier
         FOR EACH ROW
         EXECUTE FUNCTION enforce_free_tier();

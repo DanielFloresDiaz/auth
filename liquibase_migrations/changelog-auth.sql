@@ -3,18 +3,24 @@
 --------------------------- enums ---------------------------
 --changeset solomon.auth:2 labels:auth context:auth
 --comment: create organization_roles enum
+DO $$ BEGIN
 CREATE TYPE "auth"."organization_roles" AS ENUM (
   'admin',
   'client',
   'api_key',
   'project_admin'
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --rollback DROP TYPE "auth"."organization_roles";
 
 --changeset solomon.auth:3 labels:auth context:auth
 --comment: create role permissions enum
+DO $$ BEGIN
 CREATE TYPE "auth"."role_permissions" AS ENUM (
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --rollback DROP TYPE "auth"."role_permissions";
 
 --changeset solomon.auth:4 labels:auth context:auth
@@ -141,18 +147,32 @@ CREATE TABLE IF NOT EXISTS "auth".projects_tiers (
 );
 --rollback DROP TABLE "auth".projects_tiers;
 
---changeset solomon.auth:14 labels:auth context:auth
+--changeset solomon.auth:14 labels:auth context:auth splitStatements:false
 --comment: alter table auth.users
-ALTER TABLE "auth".users
-        ADD COLUMN organization_id uuid NULL,
-        ADD COLUMN project_id uuid NOT NULL,
-        ADD COLUMN organization_role "auth".organization_roles NOT NULL DEFAULT 'client',
-        ADD CONSTRAINT users_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects (id) ON DELETE CASCADE,
-        ADD CONSTRAINT users_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES "auth".organizations (id) ON DELETE CASCADE,
-        ADD CONSTRAINT users_email_organization_id_unique UNIQUE (email, organization_id),
-        ADD CONSTRAINT users_email_project_id_unique UNIQUE (email, project_id),
-        ADD CONSTRAINT users_phone_organization_id_unique UNIQUE (phone, organization_id),
-        ADD CONSTRAINT users_phone_project_id_unique UNIQUE (phone, project_id);
+ALTER TABLE "auth".users ADD COLUMN IF NOT EXISTS organization_id uuid NULL;
+ALTER TABLE "auth".users ADD COLUMN IF NOT EXISTS project_id uuid NOT NULL;
+ALTER TABLE "auth".users ADD COLUMN IF NOT EXISTS organization_role "auth".organization_roles NOT NULL DEFAULT 'client';
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_project_id_fkey') THEN
+        ALTER TABLE "auth".users ADD CONSTRAINT users_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects (id) ON DELETE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_organization_id_fkey') THEN
+        ALTER TABLE "auth".users ADD CONSTRAINT users_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES "auth".organizations (id) ON DELETE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_email_organization_id_unique') THEN
+        ALTER TABLE "auth".users ADD CONSTRAINT users_email_organization_id_unique UNIQUE (email, organization_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_email_project_id_unique') THEN
+        ALTER TABLE "auth".users ADD CONSTRAINT users_email_project_id_unique UNIQUE (email, project_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_phone_organization_id_unique') THEN
+        ALTER TABLE "auth".users ADD CONSTRAINT users_phone_organization_id_unique UNIQUE (phone, organization_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_phone_project_id_unique') THEN
+        ALTER TABLE "auth".users ADD CONSTRAINT users_phone_project_id_unique UNIQUE (phone, project_id);
+    END IF;
+END $$;
 --rollback ALTER TABLE "auth".users
 --rollback DROP COLUMN organization_id
 --rollback DROP COLUMN project_id
@@ -164,26 +184,38 @@ ALTER TABLE "auth".users
 --rollback DROP CONSTRAINT users_phone_organization_id_unique
 --rollback DROP CONSTRAINT users_phone_project_id_unique
 
---changeset solomon.auth:15 labels:auth context:auth
+--changeset solomon.auth:15 labels:auth context:auth splitStatements:false
 --comment: alter table auth.flow_state
-ALTER TABLE "auth".flow_state
-ADD COLUMN organization_id uuid NULL,
-ADD COLUMN project_id uuid NOT NULL,
-ADD CONSTRAINT flow_state_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES "auth".organizations (id),
-ADD CONSTRAINT flow_state_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects (id);
+ALTER TABLE "auth".flow_state ADD COLUMN IF NOT EXISTS organization_id uuid NULL;
+ALTER TABLE "auth".flow_state ADD COLUMN IF NOT EXISTS project_id uuid NOT NULL;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'flow_state_organization_id_fkey') THEN
+        ALTER TABLE "auth".flow_state ADD CONSTRAINT flow_state_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES "auth".organizations (id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'flow_state_project_id_fkey') THEN
+        ALTER TABLE "auth".flow_state ADD CONSTRAINT flow_state_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects (id);
+    END IF;
+END $$;
 --rollback ALTER TABLE "auth".flow_state
 --rollback DROP COLUMN organization_id
 --rollback DROP COLUMN project_id
 --rollback DROP CONSTRAINT flow_state_organization_id_fkey
 --rollback DROP CONSTRAINT flow_state_project_id_fkey
 
---changeset solomon.auth:16 labels:auth context:auth
+--changeset solomon.auth:16 labels:auth context:auth splitStatements:false
 --comment: alter table auth.identitites
-ALTER TABLE "auth".identities
-ADD COLUMN organization_id uuid NULL,
-ADD COLUMN project_id uuid NOT NULL,
-ADD CONSTRAINT identities_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES "auth".organizations (id) ON DELETE CASCADE,
-ADD CONSTRAINT identities_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects (id) ON DELETE CASCADE;
+ALTER TABLE "auth".identities ADD COLUMN IF NOT EXISTS organization_id uuid NULL;
+ALTER TABLE "auth".identities ADD COLUMN IF NOT EXISTS project_id uuid NOT NULL;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'identities_organization_id_fkey') THEN
+        ALTER TABLE "auth".identities ADD CONSTRAINT identities_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES "auth".organizations (id) ON DELETE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'identities_project_id_fkey') THEN
+        ALTER TABLE "auth".identities ADD CONSTRAINT identities_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects (id) ON DELETE CASCADE;
+    END IF;
+END $$;
 --rollback ALTER TABLE "auth".identities
 --rollback DROP COLUMN organization_id
 --rollback DROP COLUMN project_id
@@ -203,21 +235,28 @@ CREATE TABLE IF NOT EXISTS "auth".project_rate_limits (
 
 --changeset solomon.auth:18 labels:auth context:auth
 --comment: Drop unique constraint for users
-ALTER TABLE "auth".users DROP CONSTRAINT users_email_organization_id_unique;
-ALTER TABLE "auth".users DROP CONSTRAINT users_email_project_id_unique;
-ALTER TABLE "auth".users DROP CONSTRAINT users_phone_organization_id_unique;
-ALTER TABLE "auth".users DROP CONSTRAINT users_phone_project_id_unique;
+ALTER TABLE "auth".users DROP CONSTRAINT IF EXISTS users_email_organization_id_unique;
+ALTER TABLE "auth".users DROP CONSTRAINT IF EXISTS users_email_project_id_unique;
+ALTER TABLE "auth".users DROP CONSTRAINT IF EXISTS users_phone_organization_id_unique;
+ALTER TABLE "auth".users DROP CONSTRAINT IF EXISTS users_phone_project_id_unique;
 --rollback ALTER TABLE "auth".users ADD CONSTRAINT users_email_organization_id_unique UNIQUE (email, organization_id);
 --rollback ALTER TABLE "auth".users ADD CONSTRAINT users_email_project_id_unique UNIQUE (email, project_id);
 --rollback ALTER TABLE "auth".users ADD CONSTRAINT users_phone_organization_id_unique UNIQUE (phone, organization_id);
 --rollback ALTER TABLE "auth".users ADD CONSTRAINT users_phone_project_id_unique UNIQUE (phone, project_id);
 
---changeset solomon.auth:19 labels:auth context:auth
+--changeset solomon.auth:19 labels:auth context:auth splitStatements:false
 --comment: Add uniqueness constraint for users -> email, project_id, organization_id and phone, project_id, organization_id
-ALTER TABLE "auth".users ADD CONSTRAINT users_email_project_id_org_unique UNIQUE (email, project_id, organization_id);
-ALTER TABLE "auth".users ADD CONSTRAINT users_phone_project_id_org_unique UNIQUE (phone, project_id, organization_id);
---rollback ALTER TABLE "auth".users DROP CONSTRAINT users_email_project_id_org_unique;
---rollback ALTER TABLE "auth".users DROP CONSTRAINT users_phone_project_id_org_unique;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_email_project_id_org_unique') THEN
+        ALTER TABLE "auth".users ADD CONSTRAINT users_email_project_id_org_unique UNIQUE (email, project_id, organization_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_phone_project_id_org_unique') THEN
+        ALTER TABLE "auth".users ADD CONSTRAINT users_phone_project_id_org_unique UNIQUE (phone, project_id, organization_id);
+    END IF;
+END $$;
+--rollback ALTER TABLE "auth".users DROP CONSTRAINT IF EXISTS users_email_project_id_org_unique;
+--rollback ALTER TABLE "auth".users DROP CONSTRAINT IF EXISTS users_phone_project_id_org_unique;
 
 --changeset solomon.auth:20 labels:auth context:auth
 --comment: Add uniqueness constraint for users with NULL organization_id and same email, project_id and phone, project_id
