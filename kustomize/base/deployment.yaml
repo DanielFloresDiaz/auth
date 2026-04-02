@@ -333,6 +333,7 @@ spec:
             - "/cloud-sql-proxy"
             - "--private-ip"
             - "--structured-logs"
+            - "--quiet"
             - "--port=5432"
             - "--address=0.0.0.0"
             - "project-66012d22-0833-4897-a6e:europe-southwest1:solomon"
