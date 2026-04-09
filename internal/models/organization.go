@@ -75,7 +75,7 @@ func FindTiersByOrganizationIDAndOrganizationRole(tx *storage.Connection, organi
 			return tier_model, tier_time, tier_usage, nil
 		}
 
-		if organization_role == "admin" {
+		if organization_role == "admin" || organization_role == "project_admin" {
 			tier_model = organizationTier.AdminTierModel
 			tier_time = organizationTier.AdminTierTime
 			tier_usage = organizationTier.AdminTierUsage
