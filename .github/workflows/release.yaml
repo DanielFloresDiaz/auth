@@ -1,0 +1,128 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '*'
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.toml'
+      - '**/*.lock'
+      - '**/*.json'
+      - '**/*.txt'
+      - '**/*.env'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Testing job: Calls the reusable testing workflow before releasing.
+  testing:
+    uses: ./.github/workflows/testing.yaml
+    secrets: inherit
+
+  # Release job: Builds binaries, Docker image and creates GitHub releases on tags.
+  release:
+    needs: [testing]
+    if: |
+      always() &&
+      (needs.testing.result == 'success') &&
+      startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.25.5
+
+      # Extract version from GitHub tag
+      - name: Extract version from Git tag
+        id: tag_version
+        run: |
+          # Extract the version string from GITHUB_REF (refs/tags/v1.2.3 or refs/tags/1.2.3)
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION=$TAG
+          # Check if this is a dev tag
+          if [[ $TAG == dev* ]]; then
+            IS_DEV_TAG="true"
+            VERSION="dev"  # Fixed tag for all development builds
+          else
+            IS_DEV_TAG="false"
+            VERSION=$TAG
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_dev_tag=$IS_DEV_TAG" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION from tag $TAG (dev tag: $IS_DEV_TAG)"
+
+      - name: Build binaries
+        run: |
+          CGO_ENABLED=0 go build -ldflags "-X github.com/supabase/auth/internal/utilities.Version=${GITHUB_REF#refs/tags/}" -o auth
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/supabase/auth/internal/utilities.Version=${GITHUB_REF#refs/tags/}" -o auth-linux-amd64
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-X github.com/supabase/auth/internal/utilities.Version=${GITHUB_REF#refs/tags/}" -o auth-linux-arm64
+
+      # Docker build and push steps
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # For dev tags, use a single fixed "dev" tag
+            ${{ steps.tag_version.outputs.is_dev_tag == 'true' && format('type=raw,value={0}', steps.tag_version.outputs.version) || '' }}
+            # For production releases, use semantic versioning tags
+            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{version}}' || '' }}
+            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{major}}.{{minor}}' || '' }}
+            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=semver,pattern={{major}}' || '' }}
+            ${{ steps.tag_version.outputs.is_dev_tag != 'true' && 'type=raw,value=latest' || '' }}
+            # Always include the commit SHA
+            type=sha,format=short
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          file: ./dockerfiles/Dockerfile
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            RELEASE_VERSION=${{ steps.tag_version.outputs.version }}
+
+      # Skip release creation for dev tags
+      - name: Create Release
+        if: steps.tag_version.outputs.is_dev_tag != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            auth
+            auth-linux-amd64
+            auth-linux-arm64
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          overwrite_files: true

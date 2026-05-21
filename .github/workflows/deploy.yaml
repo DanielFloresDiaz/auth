@@ -1,0 +1,217 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+
+permissions:
+  contents: read
+  id-token: write # Needed for GCP authentication
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Deploy job: Deploys the application to Kubernetes environments.
+  deploy:
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      vars.RUN_DEPLOY == 'true'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write # Needed for GCP authentication
+
+    env:
+      GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Extract tag
+        id: tag_info
+        run: |
+          # For workflow_run events triggered by a tag push, head_branch contains the tag name
+          TAG=${{ github.event.workflow_run.head_branch }}
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Triggered by tag: $TAG"
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      # Authentication with Google Cloud
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Bind secrets
+        run: bash .gcloud/bind-secrets.sh
+
+      - name: Install gke-gcloud-auth-plugin
+        run: |
+          gcloud components install gke-gcloud-auth-plugin
+          echo 'export USE_GKE_GCLOUD_AUTH_PLUGIN=True' >> $GITHUB_ENV
+
+      - name: Determine deployment environment
+        id: deployment_env
+        run: |
+          TAG=${{ steps.tag_info.outputs.tag }}
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+          # Remove 'v' prefix if present for version comparison
+          VERSION=${TAG#v}
+
+          echo "deploy_dev=true" >> $GITHUB_OUTPUT
+
+          if [[ $TAG == dev* ]] || [[ $VERSION =~ ^0\. ]]; then
+            echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "deploy_prod=false" >> $GITHUB_OUTPUT
+            echo "Deploying to development environment with tag: $TAG"
+          else
+            echo "environment=prod" >> $GITHUB_OUTPUT
+            echo "deploy_prod=true" >> $GITHUB_OUTPUT
+            echo "Deploying to production environment with tag: $TAG"
+          fi
+
+      - name: Configure kubectl
+        run: |
+          gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER_NAME }} --region ${{ secrets.GKE_CLUSTER_REGION }} --project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Ensure base Kubernetes resources exist
+        run: |
+          kubectl apply -f k8s/serviceaccount.yaml
+          kubectl apply -f k8s/app-secrets.yaml
+          kubectl apply -f k8s/frontend-config.yaml
+          kubectl apply -f k8s/managed-cert.yaml
+          kubectl apply -f k8s/backend-config.yaml
+
+      - name: Generate GHCR Secret
+        run: python scripts/k8s/generate_ghcr_secret.py -u ${{ github.actor }} -t ${{ secrets.GHCR_PAT }} -n solomon --apply
+
+      - name: Install Kustomize
+        run: |
+          mkdir -p /tmp/kustomize_install
+          cd /tmp/kustomize_install
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Deploy to dev
+        if: steps.deployment_env.outputs.deploy_dev == 'true'
+        run: |
+          ENV=dev
+          TAG=${{ steps.deployment_env.outputs.tag }}
+
+          # Apply environment specific services
+          kubectl apply -f k8s/services/service-$ENV.yaml
+
+          # Remove "v" prefix if present for Docker image tag
+          DOCKER_TAG=${TAG#v}
+
+          # Create a kustomization overlay to set the image tag
+          cd kustomize/overlays/$ENV
+
+          # Force lowercase for image name to match GHCR and existing manifests
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr 'A-Z' 'a-z')
+          kustomize edit set image ghcr.io/$REPO_LOWER=ghcr.io/$REPO_LOWER:$DOCKER_TAG
+
+          # Show the changes
+          echo "Deploying image with tag: $DOCKER_TAG"
+          cat kustomization.yaml
+
+          # Apply Kustomize configuration
+          kubectl apply -k .
+
+          DEPLOYMENT_NAME="dev-auth-deployment"
+          INGRESS_NAME="dev-auth-ingress"
+
+          echo "Verifying deployment: $DEPLOYMENT_NAME in namespace solomon"
+          kubectl rollout status deployment/$DEPLOYMENT_NAME -n solomon
+
+          DEPLOYED_IMAGE=$(kubectl get deployment/$DEPLOYMENT_NAME -n solomon -o jsonpath='{.spec.template.spec.containers[0].image}')
+          echo "Deployed image: $DEPLOYED_IMAGE"
+
+          if [[ "$DEPLOYED_IMAGE" == *"$DOCKER_TAG"* ]]; then
+            echo "Correct image tag deployed!"
+          else
+            echo "Incorrect image tag deployed!"
+            exit 1
+          fi
+
+          echo "Verifying ingress: $INGRESS_NAME in namespace solomon"
+          if kubectl get ingress $INGRESS_NAME -n solomon > /dev/null 2>&1; then
+            echo "Ingress $INGRESS_NAME exists!"
+          else
+            echo "Ingress $INGRESS_NAME does not exist!"
+            exit 1
+          fi
+
+          echo "Deployment to $ENV environment completed successfully!"
+
+      - name: Deploy to prod
+        if: steps.deployment_env.outputs.deploy_prod == 'true'
+        run: |
+          ENV=prod
+          TAG=${{ steps.deployment_env.outputs.tag }}
+
+          # Apply environment specific services
+          kubectl apply -f k8s/services/service-$ENV.yaml
+
+          # Remove "v" prefix if present for Docker image tag
+          DOCKER_TAG=${TAG#v}
+
+          # Create a kustomization overlay to set the image tag
+          cd kustomize/overlays/$ENV
+
+          # Force lowercase for image name to match GHCR and existing manifests
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr 'A-Z' 'a-z')
+          kustomize edit set image ghcr.io/$REPO_LOWER=ghcr.io/$REPO_LOWER:$DOCKER_TAG
+
+          # Show the changes
+          echo "Deploying image with tag: $DOCKER_TAG"
+          cat kustomization.yaml
+
+          # Apply Kustomize configuration
+          kubectl apply -k .
+
+          DEPLOYMENT_NAME="auth-deployment"
+          INGRESS_NAME="auth-ingress"
+
+          echo "Verifying deployment: $DEPLOYMENT_NAME in namespace solomon"
+          kubectl rollout status deployment/$DEPLOYMENT_NAME -n solomon
+
+          DEPLOYED_IMAGE=$(kubectl get deployment/$DEPLOYMENT_NAME -n solomon -o jsonpath='{.spec.template.spec.containers[0].image}')
+          echo "Deployed image: $DEPLOYED_IMAGE"
+
+          if [[ "$DEPLOYED_IMAGE" == *"$DOCKER_TAG"* ]]; then
+            echo "Correct image tag deployed!"
+          else
+            echo "Incorrect image tag deployed!"
+            exit 1
+          fi
+
+          echo "Verifying ingress: $INGRESS_NAME in namespace solomon"
+          if kubectl get ingress $INGRESS_NAME -n solomon > /dev/null 2>&1; then
+            echo "Ingress $INGRESS_NAME exists!"
+          else
+            echo "Ingress $INGRESS_NAME does not exist!"
+            exit 1
+          fi
+
+          echo "Deployment to $ENV environment completed successfully!"

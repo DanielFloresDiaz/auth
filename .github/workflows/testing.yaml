@@ -1,0 +1,229 @@
+name: Testing
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.toml'
+      - '**/*.lock'
+      - '**/*.json'
+      - '**/*.txt'
+      - '**/*.env'
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.toml'
+      - '**/*.lock'
+      - '**/*.json'
+      - '**/*.txt'
+      - '**/*.env'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Check gofmt
+        run: |
+          set -x
+
+          if [ ! -z $(gofmt -l .) ]
+          then
+            echo 'Make sure to run "gofmt -s -w ." before commit!' && exit 1
+          fi
+      - name: Check go vet
+        run: |
+          set -x
+          go vet ./...
+      - name: Run static check
+        run: |
+          set -x
+          make static
+      - name: Check gosec
+        run: |
+          set -x
+          make sec
+
+  test:
+    if: ${{ !contains(github.event.head_commit.message, '[skip test]') && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push' || github.event_name == 'workflow_call') }}
+    needs: [lint]
+    strategy:
+      matrix:
+        go-version: [1.25.5]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: root
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: Init Database
+        run: psql -f hack/init_postgres.sql postgresql://postgres:root@localhost:5432/postgres
+      - name: Run migrations
+        run: make migrate_dev
+      - name: Run liquibase migrations - public
+        uses: liquibase-github-actions/update@v4.30.0
+        with:
+          changelogFile: 'liquibase_migrations/changelog-public.sql'
+          url: 'jdbc:postgresql://postgres:5432/postgres'
+          username: 'postgres'
+          password: 'root'
+          rollbackOnError: 'true'
+      - name: Run liquibase migrations - auth
+        uses: liquibase-github-actions/update@v4.30.0
+        with:
+          changelogFile: 'liquibase_migrations/changelog-auth.sql'
+          url: 'jdbc:postgresql://postgres:5432/postgres'
+          username: 'postgres'
+          password: 'root'
+          rollbackOnError: 'true'
+      - name: Run liquibase migrations - rls-auth
+        uses: liquibase-github-actions/update@v4.30.0
+        with:
+          changelogFile: 'liquibase_migrations/changelog-rls-auth.sql'
+          url: 'jdbc:postgresql://postgres:5432/postgres'
+          username: 'postgres'
+          password: 'root'
+          rollbackOnError: 'true'
+      - name: Run liquibase migrations - index-auth
+        uses: liquibase-github-actions/update@v4.30.0
+        with:
+          changelogFile: 'liquibase_migrations/changelog-index-auth.sql'
+          url: 'jdbc:postgresql://postgres:5432/postgres'
+          username: 'postgres'
+          password: 'root'
+          rollbackOnError: 'true'
+      - name: Run liquibase migrations - grants-auth
+        uses: liquibase-github-actions/update@v4.30.0
+        with:
+          changelogFile: 'liquibase_migrations/changelog-grants-auth.sql'
+          url: 'jdbc:postgresql://postgres:5432/postgres'
+          username: 'postgres'
+          password: 'root'
+          rollbackOnError: 'true'
+      - name: Run liquibase migrations - procedures-auth
+        uses: liquibase-github-actions/update@v4.30.0
+        with:
+          changelogFile: 'liquibase_migrations/changelog-procedures-auth.xml'
+          url: 'jdbc:postgresql://postgres:5432/postgres'
+          username: 'postgres'
+          password: 'root'
+          rollbackOnError: 'true'
+      - name: Run tests
+        run: make test 2>&1 | tee test-output.log
+      - name: Store coverage file
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-file
+          path: coverage.out
+          retention-days: 1
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: test-output.log
+
+  coverage:
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.25.5
+      - name: Download coverage file
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-file
+      - name: Cleanup coverage
+        run: |
+          set -x
+
+          # since Go 1.20 these source files need to be deleted from the
+          # coverage profile as they contain legacy or untestable code (like
+          # `main` package)
+
+          sed -i '/^github.com\/supabase\/auth\/client/d' coverage.out
+          sed -i '/^github.com\/supabase\/auth\/cmd/d' coverage.out
+          sed -i '/^github.com\/supabase\/auth\/docs/d' coverage.out
+          sed -i '/^github.com\/supabase\/auth\/main/d' coverage.out
+
+      - name: Generate coverage reports
+        run: |
+          go tool cover -html=coverage.out -o coverage.html
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            coverage.out
+            coverage.html
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.out
+          fail_ci_if_error: true
+          verbose: true
+
+      - uses: shogo82148/actions-goveralls@v1
+        with:
+          path-to-profile: coverage.out
+
+  # Check-skip job: Allows workflow to proceed when tests are skipped.
+  check-skip:
+    if: ${{ contains(github.event.head_commit.message, '[skip test]') }}
+    needs: [lint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip tests
+        run: echo "Tests skipped but proceeding with workflow"
+
+  # https://github.com/marketplace/actions/alls-green#why used for branch protection checks
+  check:
+    if: ${{ !contains(github.event.head_commit.message, '[skip test]') }}
+    needs: [lint, test, coverage]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decide whether the needed jobs succeeded or failed
+        uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
