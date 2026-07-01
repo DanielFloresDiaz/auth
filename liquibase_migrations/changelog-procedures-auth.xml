@@ -30,7 +30,8 @@
         CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".smtp_configs_organizations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
         CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".smtp_configs_projects FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
         CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".organization_roles_permissions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".projects_tiers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".organizations_periodic_limit FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".organizations_spend_credits FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
         CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".refresh_tokens FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
         CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".instances FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
         CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".identities FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -54,7 +55,8 @@
         DROP TRIGGER trigger_update_timestamp ON "auth".smtp_configs_organizations;
         DROP TRIGGER trigger_update_timestamp ON "auth".smtp_configs_projects;
         DROP TRIGGER trigger_update_timestamp ON "auth".organization_roles_permissions;
-        DROP TRIGGER trigger_update_timestamp ON "auth".projects_tiers;
+        DROP TRIGGER trigger_update_timestamp ON "auth".organizations_periodic_limit;
+        DROP TRIGGER trigger_update_timestamp ON "auth".organizations_spend_credits;
         DROP TRIGGER trigger_update_timestamp ON "auth".refresh_tokens;
         DROP TRIGGER trigger_update_timestamp ON "auth".instances;
         DROP TRIGGER trigger_update_timestamp ON "auth".identities;
@@ -82,7 +84,8 @@
             COMMENT ON TABLE "auth".smtp_configs_organizations IS 'Auth: Stores SMTP configurations for organizations.';
             COMMENT ON TABLE "auth".smtp_configs_projects IS 'Auth: Stores SMTP configurations for projects.';
             COMMENT ON TABLE "auth".organization_roles_permissions IS 'Auth: Stores organization roles and permissions.';
-            COMMENT ON TABLE "auth".projects_tiers IS 'Auth: Stores projects tiers.';
+            COMMENT ON TABLE "auth".organizations_periodic_limit IS 'Auth: Stores organization periodic spend limits.';
+            COMMENT ON TABLE "auth".organizations_spend_credits IS 'Auth: Stores organization credit purchases.';
 
      </createProcedure>
      <rollback>
@@ -93,6 +96,8 @@
             COMMENT ON TABLE "auth".smtp_configs_organizations IS NULL;
             COMMENT ON TABLE "auth".smtp_configs_projects IS NULL;
             COMMENT ON TABLE "auth".organization_roles_permissions IS NULL;
+            COMMENT ON TABLE "auth".organizations_periodic_limit IS NULL;
+            COMMENT ON TABLE "auth".organizations_spend_credits IS NULL;
 
      </rollback>
 </changeSet>
@@ -180,33 +185,6 @@
         DROP TRIGGER update_organization_role ON "auth"."users";
         DROP TRIGGER prevent_organization_project_null ON "auth"."users";
         DROP TRIGGER prevent_organization_project_null ON "auth"."flow_state";
-    </rollback>
-</changeSet>
-
-<changeSet author="admin" id="solomon.auth.functions:4">
-    <createProcedure
-           dbms="postgresql"
-           >
-
-        CREATE OR REPLACE FUNCTION create_project_default_tier()
-        RETURNS TRIGGER AS $$
-        BEGIN
-            INSERT INTO "auth".projects_tiers (project_id, tier, tier_model, tier_time, tier_usage)
-            VALUES (NEW.id, 'free', 'free', 'free', 'free')
-            ON CONFLICT (project_id, tier) DO NOTHING;
-            RETURN NEW;
-        END;
-        $$ LANGUAGE plpgsql;
-
-        CREATE OR REPLACE TRIGGER trigger_create_default_tier
-        AFTER INSERT ON "auth".projects
-        FOR EACH ROW
-        EXECUTE FUNCTION create_project_default_tier();
-
-    </createProcedure>
-    <rollback>
-        DROP TRIGGER trigger_create_default_tier ON "auth".projects;
-        DROP FUNCTION create_project_default_tier();
     </rollback>
 </changeSet>
 
@@ -318,27 +296,6 @@
         DROP TRIGGER prevent_change_organization_project ON "auth"."identities";
         DROP TRIGGER prevent_set_project_id ON "auth"."identities";
         DROP TRIGGER prevent_organization_project_null ON "auth"."identities";
-    </rollback>
-</changeSet>
-<changeSet author="admin" id="solomon.auth.functions:3">
-    <createProcedure
-           dbms="postgresql">
-        CREATE OR REPLACE FUNCTION enforce_free_tier()
-        RETURNS TRIGGER AS $$
-        BEGIN
-            NEW.tier := 'free';
-            RETURN NEW;
-        END;
-        $$ LANGUAGE plpgsql;
-
-        CREATE OR REPLACE TRIGGER trigger_enforce_free_tier
-        BEFORE INSERT ON "auth".organizations_tier
-        FOR EACH ROW
-        EXECUTE FUNCTION enforce_free_tier();
-    </createProcedure>
-    <rollback>
-        DROP TRIGGER trigger_enforce_free_tier ON "auth".organizations_tier;
-        DROP FUNCTION enforce_free_tier();
     </rollback>
 </changeSet>
 </databaseChangeLog>

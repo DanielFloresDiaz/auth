@@ -25,11 +25,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON "auth".organizations TO solomon_auth_use
 GRANT SELECT ON "auth".organizations_tier TO solomon_auth_user_role;
 --rollback REVOKE SELECT ON "auth".organizations_tier FROM solomon_auth_user_role;
 
---changeset solomon.auth:grant:5 labels:auth context:auth
---comment: grant select on projects_tiers to solomon_auth_user_role
-GRANT SELECT ON "auth".projects_tiers TO solomon_auth_user_role;
---rollback REVOKE SELECT ON "auth".projects_tiers FROM solomon_auth_user_role;
-
 --changeset solomon.auth:grant:6 labels:auth context:auth
 --comment: grant UPDATE on users to solomon_auth_admin_role
 GRANT SELECT, UPDATE ON "auth".users TO solomon_auth_admin_role;
@@ -39,6 +34,26 @@ GRANT SELECT, UPDATE ON "auth".users TO solomon_auth_admin_role;
 --comment: grant INSERT, UPDATE on organizations_tier to solomon_auth_admin_role
 GRANT INSERT, UPDATE ON "auth".organizations_tier TO solomon_auth_admin_role;
 --rollback REVOKE INSERT, UPDATE ON "auth".organizations_tier FROM solomon_auth_admin_role;
+
+--changeset solomon.auth:grant:7.1 labels:auth context:auth
+--comment: grant SELECT on organizations_periodic_limit to solomon_auth_user_role
+GRANT SELECT ON "auth".organizations_periodic_limit TO solomon_auth_user_role;
+--rollback REVOKE SELECT ON "auth".organizations_periodic_limit FROM solomon_auth_user_role;
+
+--changeset solomon.auth:grant:7.2 labels:auth context:auth
+--comment: grant SELECT on organizations_spend_credits to solomon_auth_user_role
+GRANT SELECT ON "auth".organizations_spend_credits TO solomon_auth_user_role;
+--rollback REVOKE SELECT ON "auth".organizations_spend_credits FROM solomon_auth_user_role;
+
+--changeset solomon.auth:grant:7.3 labels:auth context:auth
+--comment: grant INSERT, UPDATE on organizations_periodic_limit to solomon_auth_admin_role
+GRANT INSERT, UPDATE ON "auth".organizations_periodic_limit TO solomon_auth_admin_role;
+--rollback REVOKE INSERT, UPDATE ON "auth".organizations_periodic_limit FROM solomon_auth_admin_role;
+
+--changeset solomon.auth:grant:7.4 labels:auth context:auth
+--comment: grant INSERT, UPDATE on organizations_spend_credits to solomon_auth_admin_role
+GRANT INSERT, UPDATE ON "auth".organizations_spend_credits TO solomon_auth_admin_role;
+--rollback REVOKE INSERT, UPDATE ON "auth".organizations_spend_credits FROM solomon_auth_admin_role;
 
 --changeset solomon.auth:grant:8 labels:auth context:auth
 --comment: grant SELECT on projects to rl_auth_user_role

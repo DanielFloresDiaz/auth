@@ -130,22 +130,20 @@ CREATE TABLE IF NOT EXISTS "auth".api_keys (
 );
 --rollback DROP TABLE "auth".api_keys;
 
---changeset solomon.auth:13 labels:auth context:auth
---comment: create table projects_tiers
-CREATE TABLE IF NOT EXISTS "auth".projects_tiers (
-	id serial UNIQUE NOT NULL,
-	project_id uuid NOT NULL,
-	tier text NOT NULL,
-	tier_model "public".tier_models NOT NULL,
-	tier_time "public".tier_times NOT NULL,
-	tier_usage "public".tier_usages NOT NULL,
-	created_at timestamptz DEFAULT current_timestamp,
-	updated_at timestamptz DEFAULT current_timestamp,
-	CONSTRAINT projects_tiers_pkey PRIMARY KEY (id),
-	CONSTRAINT projects_tiers_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE,
-	CONSTRAINT projects_tiers_project_id_tier_unique UNIQUE (project_id, tier)
-);
---rollback DROP TABLE "auth".projects_tiers;
+--changeset solomon.auth:12.1 labels:auth context:auth
+--comment: create spend_limit_status enum
+CREATE TYPE "auth"."spend_limit_status" AS ENUM ('active', 'non_active', 'pending_cancellation');
+--rollback DROP TYPE "auth"."spend_limit_status";
+
+--changeset solomon.auth:12.2 labels:auth context:auth
+--comment: create period_interval enum
+CREATE TYPE "auth"."period_interval" AS ENUM ('monthly', 'quarterly', 'annual');
+--rollback DROP TYPE "auth"."period_interval";
+
+--changeset solomon.auth:12.3 labels:auth context:auth
+--comment: create credit_status enum
+CREATE TYPE "auth"."credit_status" AS ENUM ('active', 'expired', 'depleted');
+--rollback DROP TYPE "auth"."credit_status";
 
 --changeset solomon.auth:14 labels:auth context:auth splitStatements:false
 --comment: alter table auth.users
@@ -274,3 +272,49 @@ ALTER TABLE "auth".identities DROP CONSTRAINT IF EXISTS identities_provider_id_p
 ALTER TABLE "auth".identities ADD CONSTRAINT identities_provider_id_provider_project_id_unique UNIQUE (provider_id, provider, project_id);
 --rollback ALTER TABLE "auth".identities DROP CONSTRAINT IF EXISTS identities_provider_id_provider_project_id_unique;
 --rollback ALTER TABLE "auth".identities ADD CONSTRAINT identities_provider_id_provider_unique UNIQUE (provider_id, provider);
+
+--changeset solomon.auth:22 labels:auth context:auth
+--comment: create organizations_periodic_limit table
+CREATE TABLE IF NOT EXISTS "auth".organizations_periodic_limit (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id uuid NOT NULL,
+    amount real NOT NULL CHECK (amount > 0),
+    period_interval "auth".period_interval NOT NULL DEFAULT 'monthly',
+    period_start timestamptz NOT NULL,
+    status "auth".spend_limit_status NOT NULL DEFAULT 'non_active',
+    cancel_at_period_end boolean NOT NULL DEFAULT false,
+    created_at timestamptz DEFAULT current_timestamp,
+    updated_at timestamptz DEFAULT current_timestamp,
+    CONSTRAINT organizations_periodic_limit_organization_id_fkey
+        FOREIGN KEY (organization_id) REFERENCES "auth".organizations(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS organizations_periodic_limit_organization_id_idx
+    ON "auth".organizations_periodic_limit (organization_id);
+CREATE UNIQUE INDEX IF NOT EXISTS organizations_periodic_limit_one_active_per_org_idx
+    ON "auth".organizations_periodic_limit (organization_id)
+    WHERE status IN ('active', 'pending_cancellation');
+--rollback DROP TABLE "auth".organizations_periodic_limit;
+
+--changeset solomon.auth:23 labels:auth context:auth
+--comment: create organizations_spend_credits table
+CREATE TABLE IF NOT EXISTS "auth".organizations_spend_credits (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id uuid NOT NULL,
+    amount real NOT NULL CHECK (amount > 0),
+    expires_at timestamptz NOT NULL,
+    status "auth".credit_status NOT NULL DEFAULT 'active',
+    created_at timestamptz DEFAULT current_timestamp,
+    updated_at timestamptz DEFAULT current_timestamp,
+    CONSTRAINT organizations_spend_credits_organization_id_fkey
+        FOREIGN KEY (organization_id) REFERENCES "auth".organizations(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS organizations_spend_credits_organization_id_idx
+    ON "auth".organizations_spend_credits (organization_id);
+--rollback DROP TABLE "auth".organizations_spend_credits;
+
+--changeset solomon.auth:24 labels:auth context:auth
+--comment: normalize organizations_periodic_limit period_start to 1st of month
+UPDATE auth.organizations_periodic_limit
+SET period_start = date_trunc('month', period_start AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+WHERE period_start IS NOT NULL;
+--rollback SELECT 1;

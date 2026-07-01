@@ -1,10 +1,5 @@
 --liquibase formatted sql
 
---changeset solomon.auth-index:1 labels:auth context:auth
---comment: create index on projects_tiers tier
-CREATE INDEX IF NOT EXISTS projects_tiers_tier_index ON "auth".projects_tiers (tier);
---rollback DROP INDEX "auth".projects_tiers_tier_index;
-
 --changeset solomon.auth-index:2 labels:auth context:auth
 --comment: create index on api_keys organization_id
 CREATE INDEX IF NOT EXISTS api_keys_key_index ON "auth".api_keys (organization_id);
