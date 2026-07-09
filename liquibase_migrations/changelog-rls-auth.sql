@@ -110,3 +110,59 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 --rollback DROP POLICY IF EXISTS organizations_delete_policy ON "auth".organizations;
+
+--changeset solomon.auth-rls:7 labels:auth context:auth
+--comment: create rls policy on organization_usage_summary table
+ALTER TABLE "auth".organization_usage_summary ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+    CREATE POLICY organization_usage_summary_policy ON "auth".organization_usage_summary
+    FOR ALL
+    USING (
+        (organization_id = current_setting('app.current_organization', true)::uuid AND
+        current_setting('app.organization_role', true)::text IN ('admin', 'api_key'))
+    )
+    WITH CHECK (
+        (organization_id = current_setting('app.current_organization', true)::uuid AND
+        current_setting('app.organization_role', true)::text IN ('admin', 'api_key'))
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+--rollback DROP POLICY IF EXISTS organization_usage_summary_policy ON "auth".organization_usage_summary;
+
+--changeset solomon.auth-rls:8 labels:auth context:auth
+--comment: create rls policy on user_usage_summary table
+ALTER TABLE "auth".user_usage_summary ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+    CREATE POLICY user_usage_summary_policy ON "auth".user_usage_summary
+    FOR ALL
+    USING (
+        (organization_id = current_setting('app.current_organization', true)::uuid AND
+        current_setting('app.organization_role', true)::text IN ('admin', 'api_key')) OR
+        (user_id = current_setting('app.current_owner', true)::uuid)
+    )
+    WITH CHECK (
+        (organization_id = current_setting('app.current_organization', true)::uuid AND
+        current_setting('app.organization_role', true)::text IN ('admin', 'api_key')) OR
+        (user_id = current_setting('app.current_owner', true)::uuid)
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+--rollback DROP POLICY IF EXISTS user_usage_summary_policy ON "auth".user_usage_summary;
+
+--changeset solomon.auth-rls:9 labels:auth context:auth
+--comment: create rls policy on api_key_usage_summary table
+ALTER TABLE "auth".api_key_usage_summary ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+    CREATE POLICY api_key_usage_summary_policy ON "auth".api_key_usage_summary
+    FOR ALL
+    USING (
+        (organization_id = current_setting('app.current_organization', true)::uuid AND
+        current_setting('app.organization_role', true)::text IN ('admin', 'api_key'))
+    )
+    WITH CHECK (
+        (organization_id = current_setting('app.current_organization', true)::uuid AND
+        current_setting('app.organization_role', true)::text IN ('admin', 'api_key'))
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+--rollback DROP POLICY IF EXISTS api_key_usage_summary_policy ON "auth".api_key_usage_summary;

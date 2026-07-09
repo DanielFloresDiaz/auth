@@ -142,7 +142,7 @@ CREATE TYPE "auth"."period_interval" AS ENUM ('monthly', 'quarterly', 'annual');
 
 --changeset solomon.auth:12.3 labels:auth context:auth
 --comment: create credit_status enum
-CREATE TYPE "auth"."credit_status" AS ENUM ('active', 'expired', 'depleted');
+CREATE TYPE "auth"."credit_status" AS ENUM ('active', 'expired', 'depleted', 'disabled');
 --rollback DROP TYPE "auth"."credit_status";
 
 --changeset solomon.auth:14 labels:auth context:auth splitStatements:false
@@ -299,17 +299,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS organizations_periodic_limit_one_active_per_or
 --comment: create organizations_spend_credits table
 CREATE TABLE IF NOT EXISTS "auth".organizations_spend_credits (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id uuid NOT NULL,
-    amount real NOT NULL CHECK (amount > 0),
+    organization_id uuid NOT NULL UNIQUE,
+    amount real NOT NULL CHECK (amount >= 0),
     expires_at timestamptz NOT NULL,
     status "auth".credit_status NOT NULL DEFAULT 'active',
+    last_added_at timestamptz NOT NULL DEFAULT current_timestamp,
+    credits_disabled boolean NOT NULL DEFAULT false,
     created_at timestamptz DEFAULT current_timestamp,
     updated_at timestamptz DEFAULT current_timestamp,
     CONSTRAINT organizations_spend_credits_organization_id_fkey
         FOREIGN KEY (organization_id) REFERENCES "auth".organizations(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS organizations_spend_credits_organization_id_idx
-    ON "auth".organizations_spend_credits (organization_id);
 --rollback DROP TABLE "auth".organizations_spend_credits;
 
 --changeset solomon.auth:24 labels:auth context:auth
@@ -318,3 +318,106 @@ UPDATE auth.organizations_periodic_limit
 SET period_start = date_trunc('month', period_start AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
 WHERE period_start IS NOT NULL;
 --rollback SELECT 1;
+
+--changeset solomon.auth:25 labels:auth context:auth
+--comment: enforce one organizations_periodic_limit row per organization
+DROP INDEX IF EXISTS auth.organizations_periodic_limit_one_active_per_org_idx;
+DROP INDEX IF EXISTS auth.organizations_periodic_limit_organization_id_idx;
+ALTER TABLE auth.organizations_periodic_limit
+    ADD CONSTRAINT organizations_periodic_limit_organization_id_unique UNIQUE (organization_id);
+--rollback ALTER TABLE auth.organizations_periodic_limit DROP CONSTRAINT IF EXISTS organizations_periodic_limit_organization_id_unique;
+--rollback CREATE INDEX IF NOT EXISTS organizations_periodic_limit_organization_id_idx ON auth.organizations_periodic_limit (organization_id);
+--rollback CREATE UNIQUE INDEX IF NOT EXISTS organizations_periodic_limit_one_active_per_org_idx ON auth.organizations_periodic_limit (organization_id) WHERE status IN ('active', 'pending_cancellation');
+
+--changeset solomon.auth:25.1 labels:auth context:auth
+--comment: create organizations_spend_amount table
+CREATE TABLE IF NOT EXISTS "auth".organizations_spend_amount (
+    organization_id uuid PRIMARY KEY,
+    periodic_amount_spent real NOT NULL DEFAULT 0,
+    periodic_spent_period_start timestamptz NOT NULL DEFAULT current_timestamp,
+    credits_amount_spent real NOT NULL DEFAULT 0,
+    created_at timestamptz DEFAULT current_timestamp,
+    updated_at timestamptz DEFAULT current_timestamp,
+    CONSTRAINT organizations_spend_amount_organization_id_fkey
+        FOREIGN KEY (organization_id) REFERENCES "auth".organizations(id) ON DELETE CASCADE
+);
+--rollback DROP TABLE "auth".organizations_spend_amount;
+
+--changeset solomon.auth:26 labels:auth context:auth
+--comment: create organization_usage_summary table
+CREATE TABLE IF NOT EXISTS "auth".organization_usage_summary (
+    organization_id uuid PRIMARY KEY,
+    project_id uuid NOT NULL,
+    prompt_tokens bigint NOT NULL DEFAULT 0,
+    completion_tokens bigint NOT NULL DEFAULT 0,
+    cached_tokens bigint NOT NULL DEFAULT 0,
+    total_tokens integer GENERATED ALWAYS AS (prompt_tokens + completion_tokens) STORED,
+    total_price real NOT NULL DEFAULT 0,
+    total_seconds real NOT NULL DEFAULT 0,
+    updated_at timestamptz DEFAULT current_timestamp,
+    CONSTRAINT organization_usage_summary_organization_id_fkey
+        FOREIGN KEY (organization_id) REFERENCES "auth".organizations(id) ON DELETE CASCADE,
+    CONSTRAINT organization_usage_summary_project_id_fkey
+        FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE
+);
+--rollback DROP TABLE "auth".organization_usage_summary;
+
+--changeset solomon.auth:27 labels:auth context:auth
+--comment: create project_usage_summary table
+CREATE TABLE IF NOT EXISTS "auth".project_usage_summary (
+    project_id uuid PRIMARY KEY,
+    prompt_tokens bigint NOT NULL DEFAULT 0,
+    completion_tokens bigint NOT NULL DEFAULT 0,
+    cached_tokens bigint NOT NULL DEFAULT 0,
+    total_tokens integer GENERATED ALWAYS AS (prompt_tokens + completion_tokens) STORED,
+    total_price real NOT NULL DEFAULT 0,
+    total_seconds real NOT NULL DEFAULT 0,
+    updated_at timestamptz DEFAULT current_timestamp,
+    CONSTRAINT project_usage_summary_project_id_fkey
+        FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE
+);
+--rollback DROP TABLE "auth".project_usage_summary;
+
+--changeset solomon.auth:28 labels:auth context:auth
+--comment: create user_usage_summary table
+CREATE TABLE IF NOT EXISTS "auth".user_usage_summary (
+    user_id uuid PRIMARY KEY,
+    organization_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    prompt_tokens bigint NOT NULL DEFAULT 0,
+    completion_tokens bigint NOT NULL DEFAULT 0,
+    cached_tokens bigint NOT NULL DEFAULT 0,
+    total_tokens integer GENERATED ALWAYS AS (prompt_tokens + completion_tokens) STORED,
+    total_price real NOT NULL DEFAULT 0,
+    total_seconds real NOT NULL DEFAULT 0,
+    updated_at timestamptz DEFAULT current_timestamp,
+    CONSTRAINT user_usage_summary_user_id_fkey
+        FOREIGN KEY (user_id) REFERENCES "auth".users(id) ON DELETE CASCADE,
+    CONSTRAINT user_usage_summary_organization_id_fkey
+        FOREIGN KEY (organization_id) REFERENCES "auth".organizations(id) ON DELETE CASCADE,
+    CONSTRAINT user_usage_summary_project_id_fkey
+        FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE
+);
+--rollback DROP TABLE "auth".user_usage_summary;
+
+--changeset solomon.auth:29 labels:auth context:auth
+--comment: create api_key_usage_summary table
+CREATE TABLE IF NOT EXISTS "auth".api_key_usage_summary (
+    api_key_id uuid PRIMARY KEY,
+    organization_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    prompt_tokens bigint NOT NULL DEFAULT 0,
+    completion_tokens bigint NOT NULL DEFAULT 0,
+    cached_tokens bigint NOT NULL DEFAULT 0,
+    total_tokens integer GENERATED ALWAYS AS (prompt_tokens + completion_tokens) STORED,
+    total_price real NOT NULL DEFAULT 0,
+    total_seconds real NOT NULL DEFAULT 0,
+    updated_at timestamptz DEFAULT current_timestamp,
+    CONSTRAINT api_key_usage_summary_api_key_id_fkey
+        FOREIGN KEY (api_key_id) REFERENCES "auth".api_keys(id) ON DELETE CASCADE,
+    CONSTRAINT api_key_usage_summary_organization_id_fkey
+        FOREIGN KEY (organization_id) REFERENCES "auth".organizations(id) ON DELETE CASCADE,
+    CONSTRAINT api_key_usage_summary_project_id_fkey
+        FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE
+);
+--rollback DROP TABLE "auth".api_key_usage_summary;

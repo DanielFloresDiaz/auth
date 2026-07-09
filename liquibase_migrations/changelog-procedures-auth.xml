@@ -32,6 +32,11 @@
         CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".organization_roles_permissions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
         CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".organizations_periodic_limit FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
         CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".organizations_spend_credits FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".organizations_spend_amount FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".organization_usage_summary FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".project_usage_summary FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".user_usage_summary FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".api_key_usage_summary FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
         CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".refresh_tokens FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
         CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".instances FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
         CREATE OR REPLACE TRIGGER trigger_update_timestamp BEFORE UPDATE ON "auth".identities FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -57,6 +62,11 @@
         DROP TRIGGER trigger_update_timestamp ON "auth".organization_roles_permissions;
         DROP TRIGGER trigger_update_timestamp ON "auth".organizations_periodic_limit;
         DROP TRIGGER trigger_update_timestamp ON "auth".organizations_spend_credits;
+        DROP TRIGGER trigger_update_timestamp ON "auth".organizations_spend_amount;
+        DROP TRIGGER trigger_update_timestamp ON "auth".organization_usage_summary;
+        DROP TRIGGER trigger_update_timestamp ON "auth".project_usage_summary;
+        DROP TRIGGER trigger_update_timestamp ON "auth".user_usage_summary;
+        DROP TRIGGER trigger_update_timestamp ON "auth".api_key_usage_summary;
         DROP TRIGGER trigger_update_timestamp ON "auth".refresh_tokens;
         DROP TRIGGER trigger_update_timestamp ON "auth".instances;
         DROP TRIGGER trigger_update_timestamp ON "auth".identities;
@@ -86,6 +96,7 @@
             COMMENT ON TABLE "auth".organization_roles_permissions IS 'Auth: Stores organization roles and permissions.';
             COMMENT ON TABLE "auth".organizations_periodic_limit IS 'Auth: Stores organization periodic spend limits.';
             COMMENT ON TABLE "auth".organizations_spend_credits IS 'Auth: Stores organization credit purchases.';
+            COMMENT ON TABLE "auth".organizations_spend_amount IS 'Auth: Stores organization runtime spend amounts (maintained by request-scheduler-rs).';
 
      </createProcedure>
      <rollback>
@@ -98,6 +109,7 @@
             COMMENT ON TABLE "auth".organization_roles_permissions IS NULL;
             COMMENT ON TABLE "auth".organizations_periodic_limit IS NULL;
             COMMENT ON TABLE "auth".organizations_spend_credits IS NULL;
+            COMMENT ON TABLE "auth".organizations_spend_amount IS NULL;
 
      </rollback>
 </changeSet>

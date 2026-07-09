@@ -45,6 +45,12 @@ GRANT SELECT ON "auth".organizations_periodic_limit TO solomon_auth_user_role;
 GRANT SELECT ON "auth".organizations_spend_credits TO solomon_auth_user_role;
 --rollback REVOKE SELECT ON "auth".organizations_spend_credits FROM solomon_auth_user_role;
 
+--changeset solomon.auth:grant:7.2.1 labels:auth context:auth
+--comment: grant SELECT, INSERT, UPDATE on organizations_spend_amount to solomon_auth_user_role
+GRANT SELECT, INSERT, UPDATE ON "auth".organizations_spend_amount TO solomon_auth_user_role;
+--rollback REVOKE INSERT, UPDATE ON "auth".organizations_spend_amount FROM solomon_auth_user_role;
+--rollback REVOKE SELECT ON "auth".organizations_spend_amount FROM solomon_auth_user_role;
+
 --changeset solomon.auth:grant:7.3 labels:auth context:auth
 --comment: grant INSERT, UPDATE on organizations_periodic_limit to solomon_auth_admin_role
 GRANT INSERT, UPDATE ON "auth".organizations_periodic_limit TO solomon_auth_admin_role;
@@ -55,6 +61,11 @@ GRANT INSERT, UPDATE ON "auth".organizations_periodic_limit TO solomon_auth_admi
 GRANT INSERT, UPDATE ON "auth".organizations_spend_credits TO solomon_auth_admin_role;
 --rollback REVOKE INSERT, UPDATE ON "auth".organizations_spend_credits FROM solomon_auth_admin_role;
 
+--changeset solomon.auth:grant:7.4.1 labels:auth context:auth
+--comment: grant INSERT, UPDATE on organizations_spend_amount to solomon_auth_admin_role
+GRANT INSERT, UPDATE ON "auth".organizations_spend_amount TO solomon_auth_admin_role;
+--rollback REVOKE INSERT, UPDATE ON "auth".organizations_spend_amount FROM solomon_auth_admin_role;
+
 --changeset solomon.auth:grant:8 labels:auth context:auth
 --comment: grant SELECT on projects to rl_auth_user_role
 GRANT SELECT ON "auth".projects TO rl_auth_user_role;
@@ -64,3 +75,14 @@ GRANT SELECT ON "auth".projects TO rl_auth_user_role;
 --comment: grant SELECT, INSERT, UPDATE, DELETE on project_rate_limits to rl_auth_user
 GRANT SELECT, INSERT, UPDATE, DELETE ON "auth".project_rate_limits TO rl_auth_user_role;
 --rollback REVOKE SELECT, INSERT, UPDATE, DELETE ON "auth".project_rate_limits
+
+--changeset solomon.auth:grant:10 labels:auth context:auth
+--comment: grant permissions on usage summary tables to solomon_auth_user_role
+GRANT SELECT, INSERT, UPDATE, DELETE ON "auth".organization_usage_summary TO solomon_auth_user_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "auth".project_usage_summary TO solomon_auth_user_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "auth".user_usage_summary TO solomon_auth_user_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "auth".api_key_usage_summary TO solomon_auth_user_role;
+--rollback REVOKE SELECT, INSERT, UPDATE, DELETE ON "auth".organization_usage_summary FROM solomon_auth_user_role;
+--rollback REVOKE SELECT, INSERT, UPDATE, DELETE ON "auth".project_usage_summary FROM solomon_auth_user_role;
+--rollback REVOKE SELECT, INSERT, UPDATE, DELETE ON "auth".user_usage_summary FROM solomon_auth_user_role;
+--rollback REVOKE SELECT, INSERT, UPDATE, DELETE ON "auth".api_key_usage_summary FROM solomon_auth_user_role;
