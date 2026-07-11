@@ -140,9 +140,14 @@ CREATE TYPE "auth"."spend_limit_status" AS ENUM ('active', 'non_active', 'pendin
 CREATE TYPE "auth"."period_interval" AS ENUM ('monthly', 'quarterly', 'annual');
 --rollback DROP TYPE "auth"."period_interval";
 
+--changeset solomon.auth:12.2.1 labels:auth context:auth
+--comment: create subscription_kind enum
+CREATE TYPE "auth"."subscription_kind" AS ENUM ('prepaid', 'billing');
+--rollback DROP TYPE "auth"."subscription_kind";
+
 --changeset solomon.auth:12.3 labels:auth context:auth
 --comment: create credit_status enum
-CREATE TYPE "auth"."credit_status" AS ENUM ('active', 'expired', 'depleted', 'disabled');
+CREATE TYPE "auth"."credit_status" AS ENUM ('active', 'disabled');
 --rollback DROP TYPE "auth"."credit_status";
 
 --changeset solomon.auth:14 labels:auth context:auth splitStatements:false
@@ -278,6 +283,7 @@ ALTER TABLE "auth".identities ADD CONSTRAINT identities_provider_id_provider_pro
 CREATE TABLE IF NOT EXISTS "auth".organizations_periodic_limit (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id uuid NOT NULL,
+    subscription_kind "auth".subscription_kind NOT NULL DEFAULT 'prepaid',
     amount real NOT NULL CHECK (amount > 0),
     period_interval "auth".period_interval NOT NULL DEFAULT 'monthly',
     period_start timestamptz NOT NULL,
@@ -286,13 +292,11 @@ CREATE TABLE IF NOT EXISTS "auth".organizations_periodic_limit (
     created_at timestamptz DEFAULT current_timestamp,
     updated_at timestamptz DEFAULT current_timestamp,
     CONSTRAINT organizations_periodic_limit_organization_id_fkey
-        FOREIGN KEY (organization_id) REFERENCES "auth".organizations(id) ON DELETE CASCADE
+        FOREIGN KEY (organization_id) REFERENCES "auth".organizations(id) ON DELETE CASCADE,
+    CONSTRAINT organizations_periodic_limit_org_kind_unique UNIQUE (organization_id, subscription_kind)
 );
 CREATE INDEX IF NOT EXISTS organizations_periodic_limit_organization_id_idx
     ON "auth".organizations_periodic_limit (organization_id);
-CREATE UNIQUE INDEX IF NOT EXISTS organizations_periodic_limit_one_active_per_org_idx
-    ON "auth".organizations_periodic_limit (organization_id)
-    WHERE status IN ('active', 'pending_cancellation');
 --rollback DROP TABLE "auth".organizations_periodic_limit;
 
 --changeset solomon.auth:23 labels:auth context:auth
@@ -319,29 +323,34 @@ SET period_start = date_trunc('month', period_start AT TIME ZONE 'UTC') AT TIME 
 WHERE period_start IS NOT NULL;
 --rollback SELECT 1;
 
---changeset solomon.auth:25 labels:auth context:auth
---comment: enforce one organizations_periodic_limit row per organization
-DROP INDEX IF EXISTS auth.organizations_periodic_limit_one_active_per_org_idx;
-DROP INDEX IF EXISTS auth.organizations_periodic_limit_organization_id_idx;
-ALTER TABLE auth.organizations_periodic_limit
-    ADD CONSTRAINT organizations_periodic_limit_organization_id_unique UNIQUE (organization_id);
---rollback ALTER TABLE auth.organizations_periodic_limit DROP CONSTRAINT IF EXISTS organizations_periodic_limit_organization_id_unique;
---rollback CREATE INDEX IF NOT EXISTS organizations_periodic_limit_organization_id_idx ON auth.organizations_periodic_limit (organization_id);
---rollback CREATE UNIQUE INDEX IF NOT EXISTS organizations_periodic_limit_one_active_per_org_idx ON auth.organizations_periodic_limit (organization_id) WHERE status IN ('active', 'pending_cancellation');
-
 --changeset solomon.auth:25.1 labels:auth context:auth
---comment: create organizations_spend_amount table
-CREATE TABLE IF NOT EXISTS "auth".organizations_spend_amount (
+--comment: create organizations_credits_spent table
+CREATE TABLE IF NOT EXISTS "auth".organizations_credits_spent (
     organization_id uuid PRIMARY KEY,
-    periodic_amount_spent real NOT NULL DEFAULT 0,
-    periodic_spent_period_start timestamptz NOT NULL DEFAULT current_timestamp,
-    credits_amount_spent real NOT NULL DEFAULT 0,
+    amount_spent real NOT NULL DEFAULT 0,
     created_at timestamptz DEFAULT current_timestamp,
     updated_at timestamptz DEFAULT current_timestamp,
-    CONSTRAINT organizations_spend_amount_organization_id_fkey
+    CONSTRAINT organizations_credits_spent_organization_id_fkey
         FOREIGN KEY (organization_id) REFERENCES "auth".organizations(id) ON DELETE CASCADE
 );
---rollback DROP TABLE "auth".organizations_spend_amount;
+--rollback DROP TABLE "auth".organizations_credits_spent;
+
+--changeset solomon.auth:25.2 labels:auth context:auth
+--comment: create organizations_periodic_spent table
+CREATE TABLE IF NOT EXISTS "auth".organizations_periodic_spent (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id uuid NOT NULL,
+    subscription_kind "auth".subscription_kind NOT NULL,
+    period tstzrange NOT NULL,
+    amount_spent real NOT NULL DEFAULT 0,
+    created_at timestamptz DEFAULT current_timestamp,
+    updated_at timestamptz DEFAULT current_timestamp,
+    CONSTRAINT organizations_periodic_spent_organization_id_fkey
+        FOREIGN KEY (organization_id) REFERENCES "auth".organizations(id) ON DELETE CASCADE,
+    CONSTRAINT organizations_periodic_spent_org_kind_period_unique
+        UNIQUE (organization_id, subscription_kind, period)
+);
+--rollback DROP TABLE "auth".organizations_periodic_spent;
 
 --changeset solomon.auth:26 labels:auth context:auth
 --comment: create organization_usage_summary table
