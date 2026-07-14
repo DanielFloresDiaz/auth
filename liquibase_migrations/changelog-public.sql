@@ -18,7 +18,7 @@ END $$;
 --changeset solomon.public:3 labels:public context:public
 --comment: tier_models definition
 DO $$ BEGIN
-    CREATE TYPE "public"."tier_models" AS ENUM ('low', 'medium', 'high');
+    CREATE TYPE "public"."tier_models" AS ENUM ('low', 'medium', 'high', 'xhigh');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 --rollback DROP TYPE "public"."tier_models";
