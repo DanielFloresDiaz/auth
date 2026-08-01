@@ -586,6 +586,11 @@ func (s *Service) GenerateAccessToken(r *http.Request, tx *storage.Connection, p
 		return "", 0, terr
 	}
 
+	zdr, terr := models.FindOrganizationZDR(tx, organization_id)
+	if terr != nil {
+		return "", 0, terr
+	}
+
 	issuedAt := s.now().UTC()
 	expiresAt := issuedAt.Add(time.Second * time.Duration(config.JWT.Exp))
 	var clientID string
@@ -624,6 +629,7 @@ func (s *Service) GenerateAccessToken(r *http.Request, tx *storage.Connection, p
 		TierModel:                     tier_model,
 		TierTime:                      tier_time,
 		TierUsage:                     tier_usage,
+		ZDR:                           zdr,
 	}
 
 	var gotrueClaims jwt.Claims = claims

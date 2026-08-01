@@ -430,3 +430,8 @@ CREATE TABLE IF NOT EXISTS "auth".api_key_usage_summary (
         FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE
 );
 --rollback DROP TABLE "auth".api_key_usage_summary;
+
+--changeset solomon.auth:30 labels:auth context:auth
+--comment: add zero data retention (zdr) flag to organizations
+ALTER TABLE "auth".organizations ADD COLUMN IF NOT EXISTS zdr boolean NOT NULL DEFAULT false;
+--rollback ALTER TABLE "auth".organizations DROP COLUMN IF EXISTS zdr;

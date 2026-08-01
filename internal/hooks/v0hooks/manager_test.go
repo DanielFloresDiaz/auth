@@ -213,6 +213,7 @@ func TestHooks(t *testing.T) {
 					"tier_model":        "",
 					"tier_time":         "",
 					"tier_usage":        "",
+					"zdr":               false,
 				},
 			},
 			sql: `

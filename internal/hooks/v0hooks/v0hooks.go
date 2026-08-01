@@ -118,6 +118,7 @@ type AccessTokenClaims struct {
 	TierModel                     string                 `json:"tier_model"`
 	TierTime                      string                 `json:"tier_time"`
 	TierUsage                     string                 `json:"tier_usage"`
+	ZDR                           bool                   `json:"zdr"`
 }
 
 type MFAVerificationAttemptInput struct {

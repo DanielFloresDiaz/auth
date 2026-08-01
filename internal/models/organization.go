@@ -15,6 +15,7 @@ type Organization struct {
 	ProjectID uuid.UUID `json:"project_id" db:"project_id"`
 	AdminID   uuid.UUID `json:"admin_id" db:"admin_id"`
 	Name      string    `json:"name" db:"name"`
+	ZDR       bool      `json:"zdr" db:"zdr"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
@@ -52,6 +53,33 @@ func findOrganizationTier(tx *storage.Connection, query string, args ...interfac
 	}
 
 	return obj, nil
+}
+
+func findOrganization(tx *storage.Connection, query string, args ...interface{}) (*Organization, error) {
+	obj := &Organization{}
+	if err := tx.Eager().Q().Where(query, args...).First(obj); err != nil {
+		if errors.Cause(err) == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, errors.Wrap(err, "error finding organization")
+	}
+	return obj, nil
+}
+
+// FindOrganizationZDR returns the zero-data-retention flag for an organization.
+// Missing organizations default to false.
+func FindOrganizationZDR(tx *storage.Connection, organization_id uuid.UUID) (bool, error) {
+	if organization_id == uuid.Nil {
+		return false, nil
+	}
+	org, err := findOrganization(tx, "id = ?", organization_id)
+	if err != nil {
+		return false, err
+	}
+	if org == nil {
+		return false, nil
+	}
+	return org.ZDR, nil
 }
 
 func FindTiersByOrganizationIDAndOrganizationRole(tx *storage.Connection, organization_id uuid.UUID, organization_role string) (string, string, string, error) {
