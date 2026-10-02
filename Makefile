@@ -42,6 +42,7 @@ migrate_dev: ## Run database migrations for development.
 
 migrate_test: ## Run database migrations for test.
 	hack/migrate.sh postgres
+	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) run --no-deps liquibase sh -c "sh /liquibase/changelog/liquibase_migrations.sh"
 
 test: build ## Run tests.
 	go test $(CHECK_FILES) -coverprofile=coverage.out -coverpkg ./... -p 1 -race -v -count=1
