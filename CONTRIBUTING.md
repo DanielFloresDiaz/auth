@@ -122,7 +122,7 @@ docker-compose -f docker-compose-dev.yml build postgres
 docker-compose -f docker-compose-dev.yml up postgres
 ```
 
-You should then see in Docker that `auth-postgres-1` is running on `port: 5432`.
+You should then see in Docker that `auth-postgres-1` is running on `port: 5435`. Host port 5435 keeps this database off Solomon's Postgres on 5432.
 
 > **Important** If you happen to already have a local running instance of Postgres running on the port `5432` because you
 > may have installed via [homebrew on macOS](https://formulae.brew.sh/formula/postgresql) then be certain to stop the process using:
@@ -180,7 +180,7 @@ That lists each migration that was applied. Note: there may be more migrations t
 5. In order to have Auth connect to your PostgreSQL database running in Docker, it is important to set a connection string like:
 
 ```
-DATABASE_URL="postgres://supabase_auth_admin:root@localhost:5432/postgres"
+DATABASE_URL="postgres://supabase_auth_admin:root@localhost:5435/postgres"
 ```
 
 > Important: Auth requires a set of SMTP credentials to run, you can generate your own SMTP credentials via an SMTP provider such as AWS SES, SendGrid, MailChimp, SendInBlue or any other SMTP providers.
