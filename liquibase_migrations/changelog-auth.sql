@@ -226,16 +226,6 @@ END $$;
 --rollback DROP CONSTRAINT identities_project_id_fkey
 --rollback DROP TRIGGER prevent_set_both_organization_and_project
 
---changeset solomon.auth:17 labels:auth context:auth
---comment: create table project_rate_limits
-CREATE TABLE IF NOT EXISTS "auth".project_rate_limits (
-	project_id uuid NOT NULL,
-	user_id text NOT NULL,
-	request_time timestamptz NOT NULL,
-	CONSTRAINT project_rate_limits_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE
-);
---rollback DROP TABLE "auth".project_rate_limits
-
 --changeset solomon.auth:18 labels:auth context:auth
 --comment: Drop unique constraint for users
 ALTER TABLE "auth".users DROP CONSTRAINT IF EXISTS users_email_organization_id_unique;
@@ -435,3 +425,74 @@ CREATE TABLE IF NOT EXISTS "auth".api_key_usage_summary (
 --comment: add zero data retention (zdr) flag to organizations
 ALTER TABLE "auth".organizations ADD COLUMN IF NOT EXISTS zdr boolean NOT NULL DEFAULT false;
 --rollback ALTER TABLE "auth".organizations DROP COLUMN IF EXISTS zdr;
+
+--changeset solomon.auth:31 labels:auth context:auth
+--comment: add reasoning_tokens to usage summary tables
+ALTER TABLE "auth".organization_usage_summary ADD COLUMN IF NOT EXISTS reasoning_tokens bigint NOT NULL DEFAULT 0;
+ALTER TABLE "auth".project_usage_summary ADD COLUMN IF NOT EXISTS reasoning_tokens bigint NOT NULL DEFAULT 0;
+ALTER TABLE "auth".user_usage_summary ADD COLUMN IF NOT EXISTS reasoning_tokens bigint NOT NULL DEFAULT 0;
+ALTER TABLE "auth".api_key_usage_summary ADD COLUMN IF NOT EXISTS reasoning_tokens bigint NOT NULL DEFAULT 0;
+--rollback ALTER TABLE "auth".organization_usage_summary DROP COLUMN IF EXISTS reasoning_tokens;
+--rollback ALTER TABLE "auth".project_usage_summary DROP COLUMN IF EXISTS reasoning_tokens;
+--rollback ALTER TABLE "auth".user_usage_summary DROP COLUMN IF EXISTS reasoning_tokens;
+--rollback ALTER TABLE "auth".api_key_usage_summary DROP COLUMN IF EXISTS reasoning_tokens;
+
+--changeset solomon.auth:32 labels:auth context:auth
+--comment: allow project admins to enable organization client invites
+ALTER TABLE "auth".organizations ADD COLUMN IF NOT EXISTS invites_enabled boolean NOT NULL DEFAULT false;
+--rollback ALTER TABLE "auth".organizations DROP COLUMN IF EXISTS invites_enabled;
+
+--changeset solomon.auth:33 labels:auth context:auth
+--comment: store per-project whitelist requests and their JSON answers
+DO $$ BEGIN
+CREATE TYPE "auth"."whitelist_request_status" AS ENUM (
+  'pending',
+  'viewed',
+  'accepted',
+  'rejected'
+);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+CREATE TABLE IF NOT EXISTS "auth".whitelist_requests (
+	id uuid NOT NULL,
+	project_id uuid NOT NULL,
+	email varchar(320) NOT NULL,
+	answers jsonb NOT NULL DEFAULT '{}'::jsonb,
+	status "auth"."whitelist_request_status" NOT NULL DEFAULT 'pending',
+	invited_user_id uuid NULL,
+	created_at timestamptz NOT NULL DEFAULT current_timestamp,
+	updated_at timestamptz NOT NULL DEFAULT current_timestamp,
+	viewed_at timestamptz NULL,
+	accepted_at timestamptz NULL,
+	rejected_at timestamptz NULL,
+	CONSTRAINT whitelist_requests_pkey PRIMARY KEY (id),
+	CONSTRAINT whitelist_requests_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE,
+	CONSTRAINT whitelist_requests_invited_user_id_fkey FOREIGN KEY (invited_user_id) REFERENCES "auth".users(id) ON DELETE SET NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS whitelist_requests_open_email_idx
+	ON "auth".whitelist_requests (project_id, lower(email))
+	WHERE status IN ('pending', 'viewed', 'accepted');
+CREATE INDEX IF NOT EXISTS whitelist_requests_project_status_created_idx
+	ON "auth".whitelist_requests (project_id, status, created_at);
+--rollback DROP INDEX IF EXISTS "auth".whitelist_requests_project_status_created_idx;
+--rollback DROP INDEX IF EXISTS "auth".whitelist_requests_open_email_idx;
+--rollback DROP TABLE IF EXISTS "auth".whitelist_requests;
+--rollback DROP TYPE IF EXISTS "auth"."whitelist_request_status";
+
+--changeset solomon.auth:34 labels:auth context:auth
+--comment: one whitelist request per project and email, including rejected requests
+DROP INDEX IF EXISTS "auth".whitelist_requests_open_email_idx;
+CREATE UNIQUE INDEX IF NOT EXISTS whitelist_requests_email_idx
+	ON "auth".whitelist_requests (project_id, lower(email));
+--rollback DROP INDEX IF EXISTS "auth".whitelist_requests_email_idx;
+--rollback CREATE UNIQUE INDEX IF NOT EXISTS whitelist_requests_open_email_idx ON "auth".whitelist_requests (project_id, lower(email)) WHERE status IN ('pending', 'viewed', 'accepted');
+
+--changeset solomon.auth:35 labels:auth context:auth
+--comment: delete whitelist requests when the invited user is deleted
+ALTER TABLE "auth".whitelist_requests DROP CONSTRAINT IF EXISTS whitelist_requests_invited_user_id_fkey;
+ALTER TABLE "auth".whitelist_requests
+	ADD CONSTRAINT whitelist_requests_invited_user_id_fkey
+	FOREIGN KEY (invited_user_id) REFERENCES "auth".users(id) ON DELETE CASCADE;
+--rollback ALTER TABLE "auth".whitelist_requests DROP CONSTRAINT IF EXISTS whitelist_requests_invited_user_id_fkey;
+--rollback ALTER TABLE "auth".whitelist_requests ADD CONSTRAINT whitelist_requests_invited_user_id_fkey FOREIGN KEY (invited_user_id) REFERENCES "auth".users(id) ON DELETE SET NULL;
+

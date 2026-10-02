@@ -10,11 +10,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON "auth".api_keys TO solomon_auth_user_rol
 GRANT SELECT ON "auth".projects TO solomon_auth_user_role;
 --rollback REVOKE SELECT ON "auth".projects FROM solomon_auth_user_role;
 
---changeset solomon.auth:grant:3 labels:auth context:auth
---comment: grant select, insert, delete on project_rate_limits to solomon_auth_user_role
-GRANT SELECT, INSERT, DELETE ON "auth".project_rate_limits TO solomon_auth_user_role;
---rollback REVOKE SELECT, INSERT, DELETE ON "auth".project_rate_limits FROM solomon_auth_user_role;
-
 --changeset solomon.auth:grant:4 labels:auth context:auth
 --comment: grant select on organizations to solomon_auth_user_role
 GRANT SELECT, INSERT, UPDATE, DELETE ON "auth".organizations TO solomon_auth_user_role;
@@ -82,11 +77,6 @@ GRANT INSERT, UPDATE ON "auth".organizations_periodic_spent TO solomon_auth_admi
 GRANT SELECT ON "auth".projects TO rl_auth_user_role;
 --rollback REVOKE SELECT ON "auth".projects FROM rl_auth_user_role;
 
---changeset solomon.auth:grant:9 labels:auth context:auth
---comment: grant SELECT, INSERT, UPDATE, DELETE on project_rate_limits to rl_auth_user
-GRANT SELECT, INSERT, UPDATE, DELETE ON "auth".project_rate_limits TO rl_auth_user_role;
---rollback REVOKE SELECT, INSERT, UPDATE, DELETE ON "auth".project_rate_limits
-
 --changeset solomon.auth:grant:10 labels:auth context:auth
 --comment: grant read on usage summary tables to solomon_auth_user_role; writes to solomon_auth_admin_role
 GRANT SELECT ON "auth".organization_usage_summary TO solomon_auth_user_role;
@@ -105,3 +95,20 @@ GRANT INSERT, UPDATE, DELETE ON "auth".api_key_usage_summary TO solomon_auth_adm
 --rollback REVOKE INSERT, UPDATE, DELETE ON "auth".project_usage_summary FROM solomon_auth_admin_role;
 --rollback REVOKE INSERT, UPDATE, DELETE ON "auth".user_usage_summary FROM solomon_auth_admin_role;
 --rollback REVOKE INSERT, UPDATE, DELETE ON "auth".api_key_usage_summary FROM solomon_auth_admin_role;
+
+--changeset solomon.auth:grant:11 labels:auth context:auth
+--comment: grant SELECT on api_keys to rl_auth_user_role
+GRANT SELECT ON "auth".api_keys TO rl_auth_user_role;
+--rollback REVOKE SELECT ON "auth".api_keys FROM rl_auth_user_role;
+
+--changeset solomon.auth:grant:12 labels:auth context:auth
+--comment: grant whitelist request review access to solomon admins
+GRANT SELECT, UPDATE ON "auth".whitelist_requests TO solomon_auth_admin_role;
+--rollback REVOKE SELECT, UPDATE ON "auth".whitelist_requests FROM solomon_auth_admin_role;
+
+--changeset solomon.auth:grant:12.1 labels:auth context:auth
+--preconditions onFail:MARK_RAN
+--precondition-sql-check expectedResult:1 SELECT COUNT(*) FROM pg_roles WHERE rolname = 'auth_admin'
+--comment: grant whitelist inserts to auth_admin when that role exists
+GRANT INSERT, SELECT ON "auth".whitelist_requests TO auth_admin;
+--rollback REVOKE INSERT, SELECT ON "auth".whitelist_requests FROM auth_admin;
