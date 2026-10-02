@@ -207,6 +207,16 @@ spec:
                 configMapKeyRef:
                   name: auth-generated-config
                   key: GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI
+            - name: GOTRUE_EXTERNAL_GITHUB_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-generated-config
+                  key: GOTRUE_EXTERNAL_GITHUB_ENABLED
+            - name: GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-generated-config
+                  key: GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI
             - name: GOTRUE_URI_ALLOW_LIST
               valueFrom:
                 configMapKeyRef:
