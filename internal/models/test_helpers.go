@@ -54,7 +54,7 @@ func InitializeTestDatabase(t *testing.T, db *storage.Connection, config *conf.G
 	}
 
 	// Insert organization tier
-	if err := setup_db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations_tier (organization_id, tier) VALUES ('%s', 'free')", organization_id)).Exec(); err != nil {
+	if err := setup_db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations_tier (organization_id, project_id, tier) VALUES ('%s', '%s', 'free')", organization_id, project_id)).Exec(); err != nil {
 		panic(err)
 	}
 

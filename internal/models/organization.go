@@ -22,6 +22,7 @@ type Organization struct {
 
 type OrganizationTier struct {
 	OrganizationID  uuid.UUID `json:"organization_id" db:"organization_id"`
+	ProjectID       uuid.UUID `json:"project_id" db:"project_id"`
 	Tier            string    `json:"tier" db:"tier"`
 	AdminTierModel  string    `json:"admin_tier_model" db:"admin_tier_model"`
 	ClientTierModel string    `json:"client_tier_model" db:"client_tier_model"`
@@ -82,36 +83,41 @@ func FindOrganizationZDR(tx *storage.Connection, organization_id uuid.UUID) (boo
 	return org.ZDR, nil
 }
 
-func FindTiersByOrganizationIDAndOrganizationRole(tx *storage.Connection, organization_id uuid.UUID, organization_role string) (string, string, string, error) {
+func tiersFromOrganizationTier(organizationTier *OrganizationTier, organization_role string) (string, string, string) {
+	if organization_role == "admin" || organization_role == "project_admin" {
+		return organizationTier.AdminTierModel, organizationTier.AdminTierTime, organizationTier.AdminTierUsage
+	}
+	return organizationTier.ClientTierModel, organizationTier.ClientTierTime, organizationTier.ClientTierUsage
+}
 
-	var tier_model string = "free"
-	var tier_time string = "free"
-	var tier_usage string = "free"
-	var query string
-	var args []interface{}
+func FindTiersByOrganizationIDAndOrganizationRole(
+	tx *storage.Connection,
+	organization_id uuid.UUID,
+	project_id uuid.UUID,
+	organization_role string,
+) (string, string, string, error) {
+	tier_model := "free"
+	tier_time := "free"
+	tier_usage := "free"
 
-	if organization_id != uuid.Nil {
-		query = "organization_id = ?"
-		args = append(args, organization_id)
-		organizationTier, err := findOrganizationTier(tx, query, args...)
+	if organization_id == uuid.Nil {
+		return tier_model, tier_time, tier_usage, nil
+	}
 
+	organizationTier, err := findOrganizationTier(tx, "organization_id = ? AND project_id = ?", organization_id, project_id)
+	if err != nil {
+		return "", "", "", err
+	}
+	if organizationTier == nil {
+		organizationTier, err = findOrganizationTier(tx, "organization_id = ? AND project_id = ?", uuid.Nil, project_id)
 		if err != nil {
 			return "", "", "", err
 		}
-
-		if organizationTier == nil {
-			return tier_model, tier_time, tier_usage, nil
-		}
-
-		if organization_role == "admin" || organization_role == "project_admin" {
-			tier_model = organizationTier.AdminTierModel
-			tier_time = organizationTier.AdminTierTime
-			tier_usage = organizationTier.AdminTierUsage
-		} else {
-			tier_model = organizationTier.ClientTierModel
-			tier_time = organizationTier.ClientTierTime
-			tier_usage = organizationTier.ClientTierUsage
-		}
 	}
+	if organizationTier == nil {
+		return tier_model, tier_time, tier_usage, nil
+	}
+
+	tier_model, tier_time, tier_usage = tiersFromOrganizationTier(organizationTier, organization_role)
 	return tier_model, tier_time, tier_usage, nil
 }

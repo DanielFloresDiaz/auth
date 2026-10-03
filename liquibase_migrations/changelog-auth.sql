@@ -56,7 +56,8 @@ CREATE TABLE IF NOT EXISTS "auth".organizations (
 --changeset solomon.auth:5.1 labels:auth context:auth
 --comment: create organizations_tier table
 CREATE TABLE IF NOT EXISTS "auth".organizations_tier (
-	organization_id uuid PRIMARY KEY,
+	organization_id uuid NOT NULL,
+	project_id uuid NOT NULL,
 	tier text DEFAULT 'free',
 	admin_tier_model "public".tier_models DEFAULT 'low',
 	admin_tier_time "public".tier_times DEFAULT 'low',
@@ -66,7 +67,8 @@ CREATE TABLE IF NOT EXISTS "auth".organizations_tier (
 	client_tier_usage "public".tier_usages DEFAULT 'low',
 	created_at timestamptz DEFAULT current_timestamp,
 	updated_at timestamptz DEFAULT current_timestamp,
-	CONSTRAINT organizations_tier_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES "auth".organizations(id) ON DELETE CASCADE
+	CONSTRAINT organizations_tier_pkey PRIMARY KEY (organization_id, project_id),
+	CONSTRAINT organizations_tier_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE
 );
 --rollback DROP TABLE "auth".organizations_tier;
 
