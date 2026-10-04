@@ -300,7 +300,6 @@ CREATE TABLE IF NOT EXISTS "auth".organizations_spend_credits (
     expires_at timestamptz NOT NULL,
     status "auth".credit_status NOT NULL DEFAULT 'active',
     last_added_at timestamptz NOT NULL DEFAULT current_timestamp,
-    credits_disabled boolean NOT NULL DEFAULT false,
     created_at timestamptz DEFAULT current_timestamp,
     updated_at timestamptz DEFAULT current_timestamp,
     CONSTRAINT organizations_spend_credits_organization_id_fkey
@@ -497,4 +496,24 @@ ALTER TABLE "auth".whitelist_requests
 	FOREIGN KEY (invited_user_id) REFERENCES "auth".users(id) ON DELETE CASCADE;
 --rollback ALTER TABLE "auth".whitelist_requests DROP CONSTRAINT IF EXISTS whitelist_requests_invited_user_id_fkey;
 --rollback ALTER TABLE "auth".whitelist_requests ADD CONSTRAINT whitelist_requests_invited_user_id_fkey FOREIGN KEY (invited_user_id) REFERENCES "auth".users(id) ON DELETE SET NULL;
+
+--changeset solomon.auth:36 labels:auth context:auth
+--comment: store unconfirmed whitelist submissions until the inbox is verified
+CREATE TABLE IF NOT EXISTS "auth".whitelist_confirmations (
+	id uuid NOT NULL,
+	project_id uuid NOT NULL,
+	email varchar(320) NOT NULL,
+	answers jsonb NOT NULL DEFAULT '{}'::jsonb,
+	token_hash text NOT NULL,
+	sent_at timestamptz NOT NULL DEFAULT current_timestamp,
+	CONSTRAINT whitelist_confirmations_pkey PRIMARY KEY (id),
+	CONSTRAINT whitelist_confirmations_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX IF NOT EXISTS whitelist_confirmations_project_email_idx
+	ON "auth".whitelist_confirmations (project_id, lower(email));
+CREATE UNIQUE INDEX IF NOT EXISTS whitelist_confirmations_token_hash_idx
+	ON "auth".whitelist_confirmations (token_hash);
+--rollback DROP INDEX IF EXISTS "auth".whitelist_confirmations_token_hash_idx;
+--rollback DROP INDEX IF EXISTS "auth".whitelist_confirmations_project_email_idx;
+--rollback DROP TABLE IF EXISTS "auth".whitelist_confirmations;
 
