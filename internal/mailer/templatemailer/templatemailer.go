@@ -7,8 +7,10 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/gofrs/uuid"
 	"github.com/supabase/auth/internal/conf"
 	"github.com/supabase/auth/internal/models"
+	authtemplates "github.com/supabase/auth/templates"
 )
 
 const (
@@ -27,13 +29,9 @@ const (
 	IdentityUnlinkedNotificationTemplate    = "identity_unlinked_notification"
 	MFAFactorEnrolledNotificationTemplate   = "mfa_factor_enrolled_notification"
 	MFAFactorUnenrolledNotificationTemplate = "mfa_factor_unenrolled_notification"
+
+	WhitelistConfirmationTemplate = "whitelist_confirmation"
 )
-
-const defaultInviteMail = `<h2>You have been invited</h2>
-
-<p>You have been invited to create a user on {{ .SiteURL }}. Follow this link to accept the invite:</p>
-<p><a href="{{ .ConfirmationURL }}">Accept the invite</a></p>
-<p>Alternatively, enter the code: {{ .Token }}</p>`
 
 const defaultConfirmationMail = `<h2>Confirm Your Email</h2>
 
@@ -125,6 +123,7 @@ var (
 		IdentityUnlinkedNotificationTemplate,
 		MFAFactorEnrolledNotificationTemplate,
 		MFAFactorUnenrolledNotificationTemplate,
+		WhitelistConfirmationTemplate,
 	}
 	defaultTemplateSubjects = &conf.EmailContentConfiguration{
 		Invite:           "You have been invited",
@@ -142,9 +141,10 @@ var (
 		IdentityUnlinkedNotification:    "An identity has been unlinked",
 		MFAFactorEnrolledNotification:   "A new MFA factor has been enrolled",
 		MFAFactorUnenrolledNotification: "An MFA factor has been unenrolled",
+		WhitelistConfirmation:           "Confirm your access request",
 	}
 	defaultTemplateBodies = &conf.EmailContentConfiguration{
-		Invite:           defaultInviteMail,
+		Invite:           authtemplates.DefaultInviteHTML,
 		Confirmation:     defaultConfirmationMail,
 		Recovery:         defaultRecoveryMail,
 		MagicLink:        defaultMagicLinkMail,
@@ -159,6 +159,7 @@ var (
 		IdentityUnlinkedNotification:    defaultIdentityUnlinkedNotificationMail,
 		MFAFactorEnrolledNotification:   defaultMFAFactorEnrolledNotificationMail,
 		MFAFactorUnenrolledNotification: defaultMFAFactorUnenrolledNotificationMail,
+		WhitelistConfirmation:           authtemplates.DefaultWhitelistConfirmationHTML,
 	}
 )
 
@@ -199,26 +200,54 @@ func (m *Mailer) Headers(cfg *conf.GlobalConfiguration, messageType string) map[
 
 // InviteMail sends a invite mail to a new user
 func (m *Mailer) InviteMail(r *http.Request, user *models.User, otp, referrerURL string, externalURL *url.URL) error {
-	path, err := getPath(m.cfg.Mailer.URLPaths.Invite, &emailParams{
-		Token:      user.ConfirmationToken,
-		Type:       "invite",
-		RedirectTo: referrerURL,
-	})
-
+	confirmationURL, err := inviteConfirmationURL(m.cfg, user, referrerURL, externalURL)
 	if err != nil {
 		return err
 	}
 
+	orgID := ""
+	if user.OrganizationID.Valid && user.OrganizationID.UUID != uuid.Nil {
+		orgID = user.OrganizationID.UUID.String()
+	}
+	projectID := ""
+	if user.ProjectID != uuid.Nil {
+		projectID = user.ProjectID.String()
+	}
+
 	data := map[string]any{
 		"SiteURL":         m.cfg.SiteURL,
-		"ConfirmationURL": externalURL.ResolveReference(path).String(),
+		"ConfirmationURL": confirmationURL,
 		"Email":           user.Email,
 		"Token":           otp,
 		"TokenHash":       user.ConfirmationToken,
 		"Data":            user.UserMetaData,
 		"RedirectTo":      referrerURL,
+		"OrganizationID":  orgID,
+		"ProjectID":       projectID,
 	}
-	return m.mail(r.Context(), m.cfg, InviteTemplate, user.GetEmail(), data)
+	data["Theme"] = m.tc.themeForProject(r.Context(), m.cfg, projectID)
+	theme, err := renderThemeCopyForData(data["Theme"].(ProjectTheme), data)
+	if err != nil {
+		return err
+	}
+	data["Theme"] = theme
+	return m.mailWithBody(r.Context(), m.cfg, InviteTemplate, user.GetEmail(), data, defaultInviteMailTemplateBody())
+}
+
+func inviteConfirmationURL(cfg *conf.GlobalConfiguration, user *models.User, referrerURL string, externalURL *url.URL) (string, error) {
+	if acceptURL, ok := OAuthInviteAcceptURL(cfg, user.ConfirmationToken, referrerURL, externalURL); ok {
+		return acceptURL, nil
+	}
+
+	path, err := getPath(cfg.Mailer.URLPaths.Invite, &emailParams{
+		Token:      user.ConfirmationToken,
+		Type:       "invite",
+		RedirectTo: referrerURL,
+	})
+	if err != nil {
+		return "", err
+	}
+	return externalURL.ResolveReference(path).String(), nil
 }
 
 // ConfirmationMail sends a signup confirmation mail to a new user
@@ -475,6 +504,23 @@ func (m *Mailer) MFAFactorEnrolledNotificationMail(r *http.Request, user *models
 		"Data":       user.UserMetaData,
 	}
 	return m.mail(r.Context(), m.cfg, MFAFactorEnrolledNotificationTemplate, user.GetEmail(), data)
+}
+
+// WhitelistConfirmationMail asks the address owner to confirm a public access request.
+func (m *Mailer) WhitelistConfirmationMail(r *http.Request, projectID, email, confirmURL string) error {
+	data := map[string]any{
+		"SiteURL":         m.cfg.SiteURL,
+		"ConfirmationURL": confirmURL,
+		"Email":           email,
+		"ProjectID":       projectID,
+	}
+	theme := m.tc.themeForProject(r.Context(), m.cfg, projectID)
+	rendered, err := renderThemeCopyForData(theme, data)
+	if err != nil {
+		return err
+	}
+	data["Theme"] = rendered
+	return m.mailWithBody(r.Context(), m.cfg, WhitelistConfirmationTemplate, email, data, defaultWhitelistConfirmationMailTemplateBody())
 }
 
 func (m *Mailer) MFAFactorUnenrolledNotificationMail(r *http.Request, user *models.User, factorType string) error {

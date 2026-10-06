@@ -88,7 +88,46 @@ func (m *Mailer) mail(
 	if err != nil {
 		return err
 	}
+	return m.renderAndSend(ctx, cfg, typ, to, data, headers, ent)
+}
 
+func (m *Mailer) mailWithBody(
+	ctx context.Context,
+	cfg *conf.GlobalConfiguration,
+	tpl string,
+	to string,
+	data map[string]any,
+	body *template.Template,
+) error {
+	if _, ok := lookupEmailContentConfig(&cfg.Mailer.Subjects, tpl); !ok {
+		return fmt.Errorf("templatemailer: template type: %s is invalid", tpl)
+	}
+
+	typ := tpl
+	if typ == ReauthenticationTemplate {
+		typ = "reauthenticate"
+	}
+	subjectStr, _ := lookupEmailContentConfig(&cfg.Mailer.Subjects, tpl)
+	if subjectStr == "" {
+		subjectStr, _ = lookupEmailContentConfig(defaultTemplateSubjects, tpl)
+	}
+	subject, err := template.New(tpl + "-subject").Parse(subjectStr)
+	if err != nil {
+		return err
+	}
+	ent := newTplCacheEntry(m.tc.now(), tpl, subject, body)
+	return m.renderAndSend(ctx, cfg, typ, to, data, m.Headers(cfg, typ), ent)
+}
+
+func (m *Mailer) renderAndSend(
+	ctx context.Context,
+	cfg *conf.GlobalConfiguration,
+	typ string,
+	to string,
+	data map[string]any,
+	headers map[string][]string,
+	ent *tplCacheEntry,
+) error {
 	var buf bytes.Buffer
 	subject, body, err := ent.execute(&buf, data)
 	if err != nil {
@@ -153,16 +192,21 @@ type Cache struct {
 	sf  singleflight.Group
 	now func() time.Time
 
+	ProjectNameLookup ProjectNameLookup
+
 	// Must hold rw for below field access
-	rw sync.RWMutex
-	m  map[string]*tplCacheEntry // map[TemplateType]*tplCacheEntry
-	t  time.Time                 // Time of the most recent call to getEntry
+	rw                            sync.RWMutex
+	projectNames                  map[string]string
+	m                             map[string]*tplCacheEntry // map[TemplateType]*tplCacheEntry
+	projectThemes map[string]*projectThemeCacheEntry
+	t                             time.Time // Time of the most recent call to getEntry
 }
 
 func NewCache() *Cache {
 	return &Cache{
-		m:   make(map[string]*tplCacheEntry),
-		now: time.Now,
+		m:                             make(map[string]*tplCacheEntry),
+		projectThemes: make(map[string]*projectThemeCacheEntry),
+		now:                           time.Now,
 	}
 }
 
@@ -410,7 +454,7 @@ func (o *Cache) loadEntryDefault(
 	subjectTemp := template.Must(template.New("").Parse(subjectStr))
 
 	bodyStr := getEmailContentConfig(defaultTemplateBodies, typ, "")
-	bodyTemp := template.Must(template.New("").Parse(bodyStr))
+	bodyTemp := template.Must(template.New("").Funcs(themedTemplateFuncs).Parse(bodyStr))
 
 	now := o.now()
 	ent := newTplCacheEntry(now, typ, subjectTemp, bodyTemp)
@@ -449,7 +493,7 @@ func (o *Cache) loadEntryBody(
 
 		// We preserve the previous behavior of returning the default.
 		tempStr := getEmailContentConfig(defaultTemplateBodies, typ, "")
-		temp := template.Must(template.New("").Parse(tempStr))
+		temp := template.Must(template.New("").Funcs(themedTemplateFuncs).Parse(tempStr))
 		return temp, nil
 	}
 	if !strings.HasPrefix(url, "http") {
@@ -549,6 +593,8 @@ func lookupEmailContentConfig(
 		return cfg.MFAFactorEnrolledNotification, true
 	case MFAFactorUnenrolledNotificationTemplate:
 		return cfg.MFAFactorUnenrolledNotification, true
+	case WhitelistConfirmationTemplate:
+		return cfg.WhitelistConfirmation, true
 	}
 }
 
@@ -576,6 +622,7 @@ func checkDefaults() error {
 		"SiteURL":         "SiteURL",
 		"Token":           "Token",
 		"TokenHash":       "TokenHash",
+		"Theme":           DefaultProjectTheme(),
 	}
 
 	buf := new(bytes.Buffer)
@@ -588,9 +635,21 @@ func checkDefaults() error {
 				"templatemailer: template type %q: missing default body template", typ)
 		}
 
-		temp, err := template.New(typ).Parse(tempStr)
+		temp, err := template.New(typ).Funcs(themedTemplateFuncs).Parse(tempStr)
 		if err != nil {
 			return err
+		}
+
+		if typ == InviteTemplate || typ == WhitelistConfirmationTemplate {
+			theme, ok := data["Theme"].(ProjectTheme)
+			if !ok {
+				return fmt.Errorf("templatemailer: template type %q: missing theme in check data", typ)
+			}
+			theme, err = renderThemeCopyForData(theme, data)
+			if err != nil {
+				return err
+			}
+			data["Theme"] = theme
 		}
 
 		if err := temp.Execute(buf, data); err != nil {

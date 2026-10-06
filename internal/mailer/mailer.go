@@ -47,6 +47,8 @@ type Mailer interface {
 	IdentityUnlinkedNotificationMail(r *http.Request, user *models.User, provider string) error
 	MFAFactorEnrolledNotificationMail(r *http.Request, user *models.User, factorType string) error
 	MFAFactorUnenrolledNotificationMail(r *http.Request, user *models.User, factorType string) error
+
+	WhitelistConfirmationMail(r *http.Request, projectID, email, confirmURL string) error
 }
 
 // TODO(cstockton): Mail(...) -> Mail(Email{...}) ?

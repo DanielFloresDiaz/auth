@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="color-scheme" content="{{ .Theme.ColorScheme }}">
+  <meta name="supported-color-schemes" content="{{ .Theme.ColorScheme }}">
+  <title>{{ .Theme.Copy.Invite.Title }}</title>
+</head>
+<body style="margin:0;padding:0;background:{{ css .Theme.Colors.PageBg }};word-spacing:normal;">
+  <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">
+    {{ .Theme.Copy.Invite.Preheader }}
+  </div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="{{ css .Theme.Colors.PageBg }}" style="background:{{ css .Theme.Colors.PageBg }};">
+    <tr>
+      <td align="center" style="padding:48px 20px;">
+        <!--[if mso]><table role="presentation" width="640" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="{{ css .Theme.Colors.CardBg }}" style="max-width:640px;background:{{ css .Theme.Colors.CardBg }};border:1px solid {{ css .Theme.Colors.CardBorder }};border-radius:16px;overflow:hidden;">
+          <tr>
+            <td bgcolor="{{ css .Theme.Colors.AccentBar }}" style="height:6px;font-size:0;line-height:0;background:{{ css .Theme.Colors.AccentBar }};">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="padding:40px 40px 0;font-family:{{ css .Theme.Fonts.Eyebrow }};font-size:12px;line-height:1.4;letter-spacing:0.08em;text-transform:uppercase;color:{{ css .Theme.Colors.Eyebrow }};">
+              {{ .Theme.Copy.Invite.Eyebrow }}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:12px 40px 0;font-family:{{ css .Theme.Fonts.Heading }};font-size:36px;line-height:1.1;font-weight:800;color:{{ css .Theme.Colors.Text }};">
+              {{ if .Theme.Brand.ProductName }}{{ .Theme.Brand.ProductName }}{{ else }}{{ .Theme.Copy.Invite.Headline }}{{ end }}
+            </td>
+          </tr>
+          {{ if .Theme.Brand.Tagline }}
+          <tr>
+            <td style="padding:14px 40px 0;font-family:{{ css .Theme.Fonts.Body }};font-size:19px;line-height:1.45;color:{{ css .Theme.Colors.Text }};">
+              {{ .Theme.Brand.Tagline }}
+            </td>
+          </tr>
+          {{ end }}
+          <tr>
+            <td style="padding:20px 40px 0;font-family:{{ css .Theme.Fonts.Body }};font-size:17px;line-height:1.6;color:{{ css .Theme.Colors.Muted }};">
+              {{ .Theme.Copy.Invite.Intro }}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 40px 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="{{ css .Theme.Colors.EmailBg }}" style="background:{{ css .Theme.Colors.EmailBg }};border:1px solid {{ css .Theme.Colors.EmailBorder }};border-radius:12px;">
+                <tr>
+                  <td style="padding:20px 24px;font-family:{{ css .Theme.Fonts.Body }};">
+                    <p style="margin:0 0 8px;font-size:12px;line-height:1.4;font-weight:600;color:{{ css .Theme.Colors.Eyebrow }};text-transform:uppercase;letter-spacing:0.06em;">{{ .Theme.Copy.Invite.EmailLabel }}</p>
+                    <p style="margin:0;font-size:18px;line-height:1.4;font-weight:600;color:{{ css .Theme.Colors.Text }};word-break:break-all;">{{ .Email }}</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 40px 0;font-family:{{ css .Theme.Fonts.Body }};font-size:16px;line-height:1.6;font-weight:600;color:{{ css .Theme.Colors.Text }};">
+              {{ .Theme.Copy.Invite.StepsHeading }}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:12px 40px 0;font-family:{{ css .Theme.Fonts.Body }};font-size:16px;line-height:1.65;color:{{ css .Theme.Colors.Muted }};">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td valign="top" width="28" style="padding:0 12px 16px 0;font-size:16px;font-weight:700;color:{{ css .Theme.Colors.StepAccent }};">1.</td>
+                  <td valign="top" style="padding:0 0 16px;font-size:16px;line-height:1.65;color:{{ css .Theme.Colors.Muted }};">{{ .Theme.Copy.Invite.Step1 }}</td>
+                </tr>
+                <tr>
+                  <td valign="top" width="28" style="padding:0 12px 16px 0;font-size:16px;font-weight:700;color:{{ css .Theme.Colors.StepAccent }};">2.</td>
+                  <td valign="top" style="padding:0 0 16px;font-size:16px;line-height:1.65;color:{{ css .Theme.Colors.Muted }};">{{ .Theme.Copy.Invite.Step2 }}</td>
+                </tr>
+                <tr>
+                  <td valign="top" width="28" style="padding:0 12px 0 0;font-size:16px;font-weight:700;color:{{ css .Theme.Colors.StepAccent }};">3.</td>
+                  <td valign="top" style="padding:0;font-size:16px;line-height:1.65;color:{{ css .Theme.Colors.Muted }};">{{ .Theme.Copy.Invite.Step3 }}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:36px 40px 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" bgcolor="{{ css .Theme.Colors.ButtonBg }}" style="border-radius:10px;background:{{ css .Theme.Colors.ButtonBg }};">
+                    <a href="{{ .ConfirmationURL }}" style="display:block;padding:18px 32px;font-family:{{ css .Theme.Fonts.Body }};font-size:17px;line-height:1.2;font-weight:600;color:{{ css .Theme.Colors.ButtonText }};text-decoration:none;border-radius:10px;text-align:center;">{{ .Theme.Copy.Invite.CtaLabel }}</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 40px 0;font-family:{{ css .Theme.Fonts.Body }};font-size:14px;line-height:1.55;color:{{ css .Theme.Colors.Muted }};">
+              {{ .Theme.Copy.Invite.LinkFallback }}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:10px 40px 0;font-family:{{ css .Theme.Fonts.Body }};font-size:14px;line-height:1.55;word-break:break-all;">
+              <a href="{{ .ConfirmationURL }}" style="color:{{ css .Theme.Colors.Link }};text-decoration:underline;">{{ .ConfirmationURL }}</a>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:36px 40px 40px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding-top:28px;border-top:1px solid {{ css .Theme.Colors.DividerBorder }};font-family:{{ css .Theme.Fonts.Body }};font-size:13px;line-height:1.6;color:{{ css .Theme.Colors.FooterMuted }};">
+                    {{ .Theme.Copy.Invite.Footer }}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+        <!--[if mso]></td></tr></table><![endif]-->
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

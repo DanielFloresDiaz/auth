@@ -17,13 +17,14 @@ type MockMailer struct {
 	ReauthenticateMailCalls []ReauthenticateMailCall
 	GetEmailActionLinkCalls []GetEmailActionLinkCall
 
-	PasswordChangedMailCalls     []PasswordChangedMailCall
-	EmailChangedMailCalls        []EmailChangedMailCall
-	PhoneChangedMailCalls        []PhoneChangedMailCall
-	IdentityLinkedMailCalls      []IdentityLinkedMailCall
-	IdentityUnlinkedMailCalls    []IdentityUnlinkedMailCall
-	MFAFactorEnrolledMailCalls   []MFAFactorEnrolledMailCall
-	MFAFactorUnenrolledMailCalls []MFAFactorUnenrolledMailCall
+	PasswordChangedMailCalls       []PasswordChangedMailCall
+	EmailChangedMailCalls          []EmailChangedMailCall
+	PhoneChangedMailCalls          []PhoneChangedMailCall
+	IdentityLinkedMailCalls        []IdentityLinkedMailCall
+	IdentityUnlinkedMailCalls      []IdentityUnlinkedMailCall
+	MFAFactorEnrolledMailCalls     []MFAFactorEnrolledMailCall
+	MFAFactorUnenrolledMailCalls   []MFAFactorUnenrolledMailCall
+	WhitelistConfirmationMailCalls []WhitelistConfirmationMailCall
 }
 
 type InviteMailCall struct {
@@ -229,6 +230,21 @@ func (m *MockMailer) MFAFactorEnrolledNotificationMail(r *http.Request, user *mo
 	return nil
 }
 
+type WhitelistConfirmationMailCall struct {
+	ProjectID  string
+	Email      string
+	ConfirmURL string
+}
+
+func (m *MockMailer) WhitelistConfirmationMail(r *http.Request, projectID, email, confirmURL string) error {
+	m.WhitelistConfirmationMailCalls = append(m.WhitelistConfirmationMailCalls, WhitelistConfirmationMailCall{
+		ProjectID:  projectID,
+		Email:      email,
+		ConfirmURL: confirmURL,
+	})
+	return nil
+}
+
 func (m *MockMailer) MFAFactorUnenrolledNotificationMail(r *http.Request, user *models.User, factorType string) error {
 	m.MFAFactorUnenrolledMailCalls = append(m.MFAFactorUnenrolledMailCalls, MFAFactorUnenrolledMailCall{
 		User:       user,
@@ -253,4 +269,5 @@ func (m *MockMailer) Reset() {
 	m.IdentityUnlinkedMailCalls = nil
 	m.MFAFactorEnrolledMailCalls = nil
 	m.MFAFactorUnenrolledMailCalls = nil
+	m.WhitelistConfirmationMailCalls = nil
 }
