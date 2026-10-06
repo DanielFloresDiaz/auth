@@ -57,39 +57,39 @@ type ProjectThemeBrand struct {
 }
 
 type ProjectThemeCopy struct {
-	Invite                  InviteEmailCopy                  `yaml:"invite"`
-	AcceptInvite            AcceptInvitePageCopy             `yaml:"accept_invite"`
-	WhitelistConfirmation   WhitelistConfirmationEmailCopy   `yaml:"whitelist_confirmation"`
-	WhitelistConfirmed      WhitelistConfirmedPageCopy       `yaml:"whitelist_confirmed"`
+	Invite                InviteEmailCopy                `yaml:"invite"`
+	AcceptInvite          AcceptInvitePageCopy           `yaml:"accept_invite"`
+	WhitelistConfirmation WhitelistConfirmationEmailCopy `yaml:"whitelist_confirmation"`
+	WhitelistConfirmed    WhitelistConfirmedPageCopy     `yaml:"whitelist_confirmed"`
 }
 
 type InviteEmailCopy struct {
-	Title          string `yaml:"title"`
-	Preheader      string `yaml:"preheader"`
-	Eyebrow        string `yaml:"eyebrow"`
-	Headline       string `yaml:"headline"`
-	Intro          string `yaml:"intro"`
-	EmailLabel     string `yaml:"email_label"`
-	StepsHeading   string `yaml:"steps_heading"`
-	Step1          string `yaml:"step1"`
-	Step2          string `yaml:"step2"`
-	Step3          string `yaml:"step3"`
-	CtaLabel       string `yaml:"cta_label"`
-	LinkFallback   string `yaml:"link_fallback"`
-	Footer         string `yaml:"footer"`
+	Title        string `yaml:"title"`
+	Preheader    string `yaml:"preheader"`
+	Eyebrow      string `yaml:"eyebrow"`
+	Headline     string `yaml:"headline"`
+	Intro        string `yaml:"intro"`
+	EmailLabel   string `yaml:"email_label"`
+	StepsHeading string `yaml:"steps_heading"`
+	Step1        string `yaml:"step1"`
+	Step2        string `yaml:"step2"`
+	Step3        string `yaml:"step3"`
+	CtaLabel     string `yaml:"cta_label"`
+	LinkFallback string `yaml:"link_fallback"`
+	Footer       string `yaml:"footer"`
 }
 
 type AcceptInvitePageCopy struct {
-	Title             string `yaml:"title"`
-	Eyebrow           string `yaml:"eyebrow"`
-	Headline          string `yaml:"headline"`
-	Lead              string `yaml:"lead"`
-	EmailLabel        string `yaml:"email_label"`
-	Step1             string `yaml:"step1"`
-	Step2             string `yaml:"step2"`
-	Step3             string `yaml:"step3"`
-	ProvidersHeading  string `yaml:"providers_heading"`
-	Footer            string `yaml:"footer"`
+	Title            string `yaml:"title"`
+	Eyebrow          string `yaml:"eyebrow"`
+	Headline         string `yaml:"headline"`
+	Lead             string `yaml:"lead"`
+	EmailLabel       string `yaml:"email_label"`
+	Step1            string `yaml:"step1"`
+	Step2            string `yaml:"step2"`
+	Step3            string `yaml:"step3"`
+	ProvidersHeading string `yaml:"providers_heading"`
+	Footer           string `yaml:"footer"`
 }
 
 type WhitelistConfirmationEmailCopy struct {
@@ -282,66 +282,66 @@ func mergeThemeCopy(base, o ProjectThemeCopy) ProjectThemeCopy {
 
 func mergeInviteCopy(base, o InviteEmailCopy) InviteEmailCopy {
 	return InviteEmailCopy{
-		Title: pickString(o.Title, base.Title),
-		Preheader: pickString(o.Preheader, base.Preheader),
-		Eyebrow: pickString(o.Eyebrow, base.Eyebrow),
-		Headline: pickString(o.Headline, base.Headline),
-		Intro: pickString(o.Intro, base.Intro),
-		EmailLabel: pickString(o.EmailLabel, base.EmailLabel),
+		Title:        pickString(o.Title, base.Title),
+		Preheader:    pickString(o.Preheader, base.Preheader),
+		Eyebrow:      pickString(o.Eyebrow, base.Eyebrow),
+		Headline:     pickString(o.Headline, base.Headline),
+		Intro:        pickString(o.Intro, base.Intro),
+		EmailLabel:   pickString(o.EmailLabel, base.EmailLabel),
 		StepsHeading: pickString(o.StepsHeading, base.StepsHeading),
-		Step1: pickString(o.Step1, base.Step1),
-		Step2: pickString(o.Step2, base.Step2),
-		Step3: pickString(o.Step3, base.Step3),
-		CtaLabel: pickString(o.CtaLabel, base.CtaLabel),
+		Step1:        pickString(o.Step1, base.Step1),
+		Step2:        pickString(o.Step2, base.Step2),
+		Step3:        pickString(o.Step3, base.Step3),
+		CtaLabel:     pickString(o.CtaLabel, base.CtaLabel),
 		LinkFallback: pickString(o.LinkFallback, base.LinkFallback),
-		Footer: pickString(o.Footer, base.Footer),
+		Footer:       pickString(o.Footer, base.Footer),
 	}
 }
 
 func mergeAcceptInviteCopy(base, o AcceptInvitePageCopy) AcceptInvitePageCopy {
 	return AcceptInvitePageCopy{
-		Title: pickString(o.Title, base.Title),
-		Eyebrow: pickString(o.Eyebrow, base.Eyebrow),
-		Headline: pickString(o.Headline, base.Headline),
-		Lead: pickString(o.Lead, base.Lead),
-		EmailLabel: pickString(o.EmailLabel, base.EmailLabel),
-		Step1: pickString(o.Step1, base.Step1),
-		Step2: pickString(o.Step2, base.Step2),
-		Step3: pickString(o.Step3, base.Step3),
+		Title:            pickString(o.Title, base.Title),
+		Eyebrow:          pickString(o.Eyebrow, base.Eyebrow),
+		Headline:         pickString(o.Headline, base.Headline),
+		Lead:             pickString(o.Lead, base.Lead),
+		EmailLabel:       pickString(o.EmailLabel, base.EmailLabel),
+		Step1:            pickString(o.Step1, base.Step1),
+		Step2:            pickString(o.Step2, base.Step2),
+		Step3:            pickString(o.Step3, base.Step3),
 		ProvidersHeading: pickString(o.ProvidersHeading, base.ProvidersHeading),
-		Footer: pickString(o.Footer, base.Footer),
+		Footer:           pickString(o.Footer, base.Footer),
 	}
 }
 
 func mergeWhitelistConfirmationCopy(base, o WhitelistConfirmationEmailCopy) WhitelistConfirmationEmailCopy {
 	return WhitelistConfirmationEmailCopy{
-		Title: pickString(o.Title, base.Title),
-		Preheader: pickString(o.Preheader, base.Preheader),
-		Eyebrow: pickString(o.Eyebrow, base.Eyebrow),
-		Headline: pickString(o.Headline, base.Headline),
-		Intro: pickString(o.Intro, base.Intro),
-		EmailLabel: pickString(o.EmailLabel, base.EmailLabel),
+		Title:        pickString(o.Title, base.Title),
+		Preheader:    pickString(o.Preheader, base.Preheader),
+		Eyebrow:      pickString(o.Eyebrow, base.Eyebrow),
+		Headline:     pickString(o.Headline, base.Headline),
+		Intro:        pickString(o.Intro, base.Intro),
+		EmailLabel:   pickString(o.EmailLabel, base.EmailLabel),
 		StepsHeading: pickString(o.StepsHeading, base.StepsHeading),
-		Step1: pickString(o.Step1, base.Step1),
-		Step2: pickString(o.Step2, base.Step2),
-		Step3: pickString(o.Step3, base.Step3),
-		CtaLabel: pickString(o.CtaLabel, base.CtaLabel),
+		Step1:        pickString(o.Step1, base.Step1),
+		Step2:        pickString(o.Step2, base.Step2),
+		Step3:        pickString(o.Step3, base.Step3),
+		CtaLabel:     pickString(o.CtaLabel, base.CtaLabel),
 		LinkFallback: pickString(o.LinkFallback, base.LinkFallback),
-		Footer: pickString(o.Footer, base.Footer),
+		Footer:       pickString(o.Footer, base.Footer),
 	}
 }
 
 func mergeWhitelistConfirmedCopy(base, o WhitelistConfirmedPageCopy) WhitelistConfirmedPageCopy {
 	return WhitelistConfirmedPageCopy{
-		Title: pickString(o.Title, base.Title),
-		Eyebrow: pickString(o.Eyebrow, base.Eyebrow),
-		Headline: pickString(o.Headline, base.Headline),
-		Lead: pickString(o.Lead, base.Lead),
+		Title:      pickString(o.Title, base.Title),
+		Eyebrow:    pickString(o.Eyebrow, base.Eyebrow),
+		Headline:   pickString(o.Headline, base.Headline),
+		Lead:       pickString(o.Lead, base.Lead),
 		EmailLabel: pickString(o.EmailLabel, base.EmailLabel),
-		Step1: pickString(o.Step1, base.Step1),
-		Step2: pickString(o.Step2, base.Step2),
-		Step3: pickString(o.Step3, base.Step3),
-		Footer: pickString(o.Footer, base.Footer),
+		Step1:      pickString(o.Step1, base.Step1),
+		Step2:      pickString(o.Step2, base.Step2),
+		Step3:      pickString(o.Step3, base.Step3),
+		Footer:     pickString(o.Footer, base.Footer),
 	}
 }
 

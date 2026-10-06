@@ -87,7 +87,7 @@ func TestThemeForProjectInvalidYAMLReturnsDefault(t *testing.T) {
 func TestMergeProjectThemePreservesDefaults(t *testing.T) {
 	base := DefaultProjectTheme()
 	merged := mergeProjectTheme(base, ProjectTheme{
-		Brand: ProjectThemeBrand{ProductName: "Brawler"},
+		Brand:  ProjectThemeBrand{ProductName: "Brawler"},
 		Colors: ProjectThemeColors{Accent: "#ff8000"},
 	})
 	require.Equal(t, "Brawler", merged.Brand.ProductName)

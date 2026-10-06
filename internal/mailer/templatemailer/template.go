@@ -195,18 +195,18 @@ type Cache struct {
 	ProjectNameLookup ProjectNameLookup
 
 	// Must hold rw for below field access
-	rw                            sync.RWMutex
-	projectNames                  map[string]string
-	m                             map[string]*tplCacheEntry // map[TemplateType]*tplCacheEntry
+	rw            sync.RWMutex
+	projectNames  map[string]string
+	m             map[string]*tplCacheEntry // map[TemplateType]*tplCacheEntry
 	projectThemes map[string]*projectThemeCacheEntry
-	t                             time.Time // Time of the most recent call to getEntry
+	t             time.Time // Time of the most recent call to getEntry
 }
 
 func NewCache() *Cache {
 	return &Cache{
-		m:                             make(map[string]*tplCacheEntry),
+		m:             make(map[string]*tplCacheEntry),
 		projectThemes: make(map[string]*projectThemeCacheEntry),
-		now:                           time.Now,
+		now:           time.Now,
 	}
 }
 
