@@ -21,7 +21,7 @@ services:
       dockerfile: ./dockerfiles/Dockerfile.postgres.dev
     container_name: auth_postgres
     ports:
-      - '5435:5432'
+      - '5437:5432'
     volumes:
       - auth_data:/var/lib/postgresql/data
     restart: always

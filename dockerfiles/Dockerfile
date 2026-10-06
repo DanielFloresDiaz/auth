@@ -24,7 +24,10 @@ RUN adduser -D -u 1000 supabase
 RUN apk add --no-cache ca-certificates
 COPY --from=build /go/src/github.com/supabase/auth/auth /usr/local/bin/auth
 COPY --from=build /go/src/github.com/supabase/auth/migrations /usr/local/etc/auth/migrations/
-RUN ln -s /usr/local/bin/auth /usr/local/bin/gotrue
+COPY --from=build /go/src/github.com/supabase/auth/templates /templates
+RUN ln -s /usr/local/bin/auth /usr/local/bin/gotrue && chown -R supabase:supabase /templates
+
+ENV GOTRUE_MAILER_TEMPLATES_PROJECT_DIR=/templates
 
 EXPOSE 9999
 
