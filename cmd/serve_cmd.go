@@ -64,6 +64,7 @@ func serve(ctx context.Context) {
 	defer wg.Wait() // Do not return to caller until this goroutine is done.
 
 	mrCache := templatemailer.NewCache()
+	mrCache.ProjectNameLookup = templatemailer.ProjectNameLookupFromDB(db)
 	limiterOpts := api.NewLimiterOptions(config)
 	initialAPI := api.NewAPIWithVersion(
 		config, db, utilities.Version,

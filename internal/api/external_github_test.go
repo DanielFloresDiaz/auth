@@ -269,6 +269,48 @@ func (ts *ExternalTestSuite) TestInviteTokenExternalGitHubErrorWhenEmailDoesntMa
 	assertAuthorizationFailure(ts, u, "Invited email does not match emails from external provider", "invalid_request", "")
 }
 
+func (ts *ExternalTestSuite) TestInviteTokenExternalGitHubErrorWhenEmailUnverified() {
+	ts.createUser("123", "github@example.com", "", "", "invite_token")
+
+	tokenCount, userCount := 0, 0
+	code := "authcode"
+	emails := `[{"email":"github@example.com", "primary": true, "verified": false}]`
+	server := GitHubTestSignupSetup(ts, &tokenCount, &userCount, code, emails)
+	defer server.Close()
+
+	u := performAuthorization(ts, "github", code, "invite_token")
+	v, err := url.ParseQuery(u.RawQuery)
+	ts.Require().NoError(err)
+	ts.Equal("Invited email does not match emails from external provider", v.Get("error_description"))
+	ts.Equal("invalid_request", v.Get("error"))
+
+	user, err := models.FindUserByEmailAndAudience(ts.API.db, "github@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
+	ts.Require().NoError(err)
+	ts.False(user.IsConfirmed())
+	ts.Equal("invite_token", user.ConfirmationToken)
+	ts.Require().NoError(ts.API.db.Load(user, "Identities"))
+	for _, identity := range user.Identities {
+		ts.NotEqual("github", identity.Provider)
+	}
+	ott, err := models.FindOneTimeToken(ts.API.db, "invite_token", models.ConfirmationToken)
+	ts.Require().NoError(err)
+	ts.NotNil(ott)
+}
+
+func (ts *ExternalTestSuite) TestInviteTokenExternalGitHubSuccessWhenVerifiedEmailDiffersByCase() {
+	ts.createUser("123", "github@example.com", "", "", "invite_token")
+
+	tokenCount, userCount := 0, 0
+	code := "authcode"
+	emails := `[{"email":"github@example.com", "primary": false, "verified": false},{"email":"GitHub@example.com", "primary": true, "verified": true}]`
+	server := GitHubTestSignupSetup(ts, &tokenCount, &userCount, code, emails)
+	defer server.Close()
+
+	u := performAuthorization(ts, "github", code, "invite_token")
+
+	assertAuthorizationSuccess(ts, u, tokenCount, userCount, "github@example.com", "GitHub Test", "123", "http://example.com/avatar")
+}
+
 func (ts *ExternalTestSuite) TestSignupExternalGitHubErrorWhenVerifiedFalse() {
 	ts.Config.Mailer.AllowUnverifiedEmailSignIns = false
 	tokenCount, userCount := 0, 0

@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/supabase/auth/internal/conf"
 	"github.com/supabase/auth/internal/models"
@@ -56,7 +57,9 @@ func (ts *ExternalTestSuite) createUser(providerId string, email string, name st
 	u, err := models.NewUser("", email, "test", ts.Config.JWT.Aud, userData, ts.OrganizationID, ts.ProjectID)
 
 	if confirmationToken != "" {
+		now := time.Now()
 		u.ConfirmationToken = confirmationToken
+		u.ConfirmationSentAt = &now
 	}
 	ts.Require().NoError(err, "Error making new user")
 	ts.Require().NoError(ts.API.db.Create(u, "organization_role"), "Error creating user")
@@ -90,7 +93,9 @@ func (ts *ExternalTestSuite) createUserWithIdentity(providerType, providerId str
 	u, err := models.NewUser("", email, "test", ts.Config.JWT.Aud, userData, organization_id, project_id)
 
 	if confirmationToken != "" {
+		now := time.Now()
 		u.ConfirmationToken = confirmationToken
+		u.ConfirmationSentAt = &now
 	}
 	ts.Require().NoError(err, "Error making new user")
 	ts.Require().NoError(ts.API.db.Create(u), "Error creating user")

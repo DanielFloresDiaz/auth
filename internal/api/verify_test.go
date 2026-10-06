@@ -315,6 +315,57 @@ func (ts *VerifyTestSuite) TestVerifySecureEmailChange() {
 	}
 }
 
+func (ts *VerifyTestSuite) TestOAuthInviteVerifyDoesNotConfirm() {
+	ts.Config.External.Email.Enabled = false
+	defer func() {
+		ts.Config.External.Email.Enabled = true
+	}()
+
+	u, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, uuid.Nil)
+	require.NoError(ts.T(), err)
+	sentAt := time.Now()
+	u.ConfirmationToken = "oauth-invite-token"
+	u.ConfirmationSentAt = &sentAt
+	u.EmailConfirmedAt = nil
+	require.NoError(ts.T(), ts.API.db.Update(u))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.ConfirmationToken, models.ConfirmationToken))
+
+	getReq := httptest.NewRequest(http.MethodGet, "http://localhost/verify?type=invite&token="+u.ConfirmationToken, nil)
+	getRec := httptest.NewRecorder()
+	ts.API.handler.ServeHTTP(getRec, getReq)
+	require.Equal(ts.T(), http.StatusSeeOther, getRec.Code)
+	location, err := url.Parse(getRec.Header().Get("Location"))
+	require.NoError(ts.T(), err)
+	fragment, err := url.ParseQuery(location.Fragment)
+	require.NoError(ts.T(), err)
+	assert.Equal(ts.T(), apierrors.ErrorCodeOTPExpired, fragment.Get("error_code"))
+	assert.Empty(ts.T(), fragment.Get("access_token"))
+
+	body, err := json.Marshal(map[string]string{
+		"type":            "invite",
+		"token_hash":      u.ConfirmationToken,
+		"organization_id": ts.OrganizationID.String(),
+	})
+	require.NoError(ts.T(), err)
+	postReq := httptest.NewRequest(http.MethodPost, "http://localhost/verify", bytes.NewReader(body))
+	postReq.Header.Set("Content-Type", "application/json")
+	postRec := httptest.NewRecorder()
+	ts.API.handler.ServeHTTP(postRec, postReq)
+	require.Equal(ts.T(), http.StatusForbidden, postRec.Code)
+	var postBody map[string]any
+	require.NoError(ts.T(), json.Unmarshal(postRec.Body.Bytes(), &postBody))
+	assert.Equal(ts.T(), apierrors.ErrorCodeOTPExpired, postBody["error_code"])
+	assert.Empty(ts.T(), postBody["access_token"])
+
+	reloaded, err := models.FindUserByEmailAndAudience(ts.API.db, "test@example.com", ts.Config.JWT.Aud, ts.OrganizationID, uuid.Nil)
+	require.NoError(ts.T(), err)
+	assert.False(ts.T(), reloaded.IsConfirmed())
+	assert.Equal(ts.T(), "oauth-invite-token", reloaded.ConfirmationToken)
+	ott, err := models.FindOneTimeToken(ts.API.db, "oauth-invite-token", models.ConfirmationToken)
+	require.NoError(ts.T(), err)
+	require.NotNil(ts.T(), ott)
+}
+
 func (ts *VerifyTestSuite) TestExpiredConfirmationToken() {
 	// verify variant testing not necessary in this test as it's testing
 	// the ConfirmationSentAt behavior, not the ConfirmationToken behavior

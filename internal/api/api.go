@@ -114,6 +114,7 @@ func NewAPIWithVersion(globalConfig *conf.GlobalConfiguration, db *storage.Conne
 	}
 	if api.mailer == nil {
 		tc := templatemailer.NewCache()
+		tc.ProjectNameLookup = templatemailer.ProjectNameLookupFromDB(db)
 		api.mailer = templatemailer.FromConfig(globalConfig, tc)
 	}
 
@@ -200,6 +201,10 @@ func NewAPIWithVersion(globalConfig *conf.GlobalConfiguration, db *storage.Conne
 		// `/authorize` to initiate OAuth2 authorization flow with the external providers
 		// where Supabase Auth is an OAuth2 Client
 		r.Get("/authorize", api.ExternalProviderRedirect)
+		r.Get("/accept-invite", api.AcceptInvite)
+		r.With(api.limitHandler(api.limiterOpts.Signups)).
+			With(api.verifyCaptcha).Post("/whitelist", api.CreateWhitelistRequest)
+		r.With(api.limitHandler(api.limiterOpts.Verify)).Get("/whitelist/confirm", api.ConfirmWhitelistRequest)
 
 		r.With(api.requireAdminCredentials).Post("/invite", api.Invite)
 

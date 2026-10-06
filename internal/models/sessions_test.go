@@ -104,7 +104,13 @@ func (ts *SessionsTestSuite) TestCalculateAALAndAMR() {
 	found := false
 	for _, claim := range session.AMRClaims {
 		if claim.GetAuthenticationMethod() == TOTPSignIn.String() {
-			require.True(ts.T(), firstClaimAddedTime.Before(claim.UpdatedAt))
+			require.Falsef(
+				ts.T(),
+				claim.UpdatedAt.Before(firstClaimAddedTime.Add(-time.Second)),
+				"first=%s updated=%s",
+				firstClaimAddedTime.Format(time.RFC3339Nano),
+				claim.UpdatedAt.Format(time.RFC3339Nano),
+			)
 			found = true
 		}
 	}

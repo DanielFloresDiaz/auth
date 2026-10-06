@@ -10,6 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"context"
+	"os"
+	"path/filepath"
+
 	"github.com/gofrs/uuid"
 	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
@@ -17,6 +21,8 @@ import (
 	"github.com/stretchr/testify/suite"
 	"github.com/supabase/auth/internal/conf"
 	"github.com/supabase/auth/internal/crypto"
+
+	"github.com/supabase/auth/internal/mailer/templatemailer"
 	"github.com/supabase/auth/internal/models"
 )
 
@@ -44,6 +50,9 @@ func TestInvite(t *testing.T) {
 }
 
 func (ts *InviteTestSuite) SetupTest() {
+	// Invite mail tests disable email signup. Password invite verification still requires it.
+	ts.Config.External.Email.Enabled = true
+
 	// Initialize the database with project, organization, and admin user
 	ts.ProjectID, ts.OrganizationID, _ = InitializeTestDatabase(ts.T(), ts.API, ts.Config)
 
@@ -105,6 +114,35 @@ func (ts *InviteTestSuite) TestInvite() {
 
 	ts.API.handler.ServeHTTP(w, req)
 	assert.Equal(ts.T(), http.StatusOK, w.Code)
+}
+
+func (ts *InviteTestSuite) TestInviteWithProjectIDOnly() {
+	email := "project-only-invite@example.com"
+	var buffer bytes.Buffer
+	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
+		"email":      email,
+		"project_id": ts.ProjectID.String(),
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "http://localhost/invite", &buffer)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ts.token))
+
+	w := httptest.NewRecorder()
+	ts.API.handler.ServeHTTP(w, req)
+	assert.Equal(ts.T(), http.StatusOK, w.Code)
+
+	user, err := models.FindUserByEmailAndAudience(ts.API.db, email, ts.Config.JWT.Aud, uuid.Nil, ts.ProjectID)
+	require.NoError(ts.T(), err)
+	assert.Equal(ts.T(), ts.ProjectID, user.ProjectID)
+	assert.False(ts.T(), user.OrganizationID.Valid)
+	assert.NotEmpty(ts.T(), user.ConfirmationToken)
+
+	var body struct {
+		InviteToken string `json:"invite_token"`
+	}
+	require.NoError(ts.T(), json.Unmarshal(w.Body.Bytes(), &body))
+	assert.Equal(ts.T(), user.ConfirmationToken, body.InviteToken)
 }
 
 func (ts *InviteTestSuite) TestInviteExists() {
@@ -355,7 +393,7 @@ func (ts *InviteTestSuite) TestInviteExternalGitlab() {
 
 	// get redirect url w/ state
 	provider := "gitlab"
-	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s&project_id=%s&invite_token=%s", provider, ts.OrganizationID.String(), ts.ProjectID.String(), user.ConfirmationToken)
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&invite_token=%s", provider, user.ConfirmationToken)
 	req = httptest.NewRequest(http.MethodGet, url_path, nil)
 	w = httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)
@@ -451,7 +489,7 @@ func (ts *InviteTestSuite) TestInviteExternalGitlab_MismatchedEmails() {
 
 	// get redirect url w/ state
 	provider := "gitlab"
-	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&organization_id=%s&project_id=%s&invite_token=%s", provider, ts.OrganizationID.String(), ts.ProjectID.String(), user.ConfirmationToken)
+	url_path := fmt.Sprintf("http://localhost/authorize?provider=%s&invite_token=%s", provider, user.ConfirmationToken)
 	req = httptest.NewRequest(http.MethodGet, url_path, nil)
 	w = httptest.NewRecorder()
 	ts.API.handler.ServeHTTP(w, req)
@@ -480,4 +518,108 @@ func (ts *InviteTestSuite) TestInviteExternalGitlab_MismatchedEmails() {
 	ts.Require().NoError(err, u.RawQuery)
 	ts.Require().NotEmpty(v.Get("error_description"))
 	ts.Require().Equal("invalid_request", v.Get("error"))
+}
+
+type recordingMailClient struct {
+	body string
+}
+
+func (m *recordingMailClient) Mail(_ context.Context, _, _, body string, _ map[string][]string, _ string) error {
+	m.body = body
+	return nil
+}
+
+func (ts *InviteTestSuite) TestInviteMailUsesAcceptInviteURL() {
+	ts.Config.External.Email.Enabled = false
+	ts.Config.External.Google.Enabled = true
+
+	user, err := models.NewUser("", "google-invite@example.com", "", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
+	ts.Require().NoError(err)
+	user.ConfirmationToken = "hashed-invite-token"
+
+	recorder := &recordingMailClient{}
+	mailer := templatemailer.New(ts.Config, recorder, templatemailer.NewCache())
+	external, err := url.Parse("http://localhost:9999")
+	ts.Require().NoError(err)
+
+	req := httptest.NewRequest(http.MethodPost, "/invite", nil)
+	req.Header.Set("redirect_to", "https://dashboard.org/auth/callback")
+	ts.Require().NoError(mailer.InviteMail(req, user, "otp", "https://dashboard.org/auth/callback", external))
+
+	ts.Contains(recorder.body, "/accept-invite?")
+	ts.Contains(recorder.body, "invite_token=hashed-invite-token")
+	ts.NotContains(recorder.body, "provider=google")
+	ts.NotContains(recorder.body, "organization_id=")
+	ts.NotContains(recorder.body, "project_id=")
+	ts.Contains(recorder.body, "redirect_to=")
+	ts.NotContains(recorder.body, "/verify")
+}
+
+func (ts *InviteTestSuite) TestInviteMailProjectTheme() {
+	ts.Config.External.Email.Enabled = false
+	ts.Config.External.Google.Enabled = true
+
+	base := ts.T().TempDir()
+	ts.Require().NoError(os.MkdirAll(filepath.Join(base, "brawler"), 0o755))
+	ts.Require().NoError(os.WriteFile(filepath.Join(base, "brawler", "theme.yaml"), []byte(`copy:
+  invite:
+    intro: Project specific invite
+`), 0o644))
+	ts.Config.Mailer.Templates.ProjectDir = base
+
+	user, err := models.NewUser("", "override@example.com", "", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
+	ts.Require().NoError(err)
+	user.ConfirmationToken = "override-token"
+
+	other, err := models.NewUser("", "default@example.com", "", ts.Config.JWT.Aud, nil, ts.OrganizationID, uuid.Must(uuid.NewV4()))
+	ts.Require().NoError(err)
+	other.ConfirmationToken = "default-token"
+
+	external, err := url.Parse("http://localhost:9999")
+	ts.Require().NoError(err)
+	req := httptest.NewRequest(http.MethodPost, "/invite", nil)
+
+	cache := templatemailer.NewCache()
+	cache.ProjectNameLookup = func(_ context.Context, _ uuid.UUID) (string, error) {
+		return "BRAWLER", nil
+	}
+
+	projectMail := &recordingMailClient{}
+	mailer := templatemailer.New(ts.Config, projectMail, cache)
+	ts.Require().NoError(mailer.InviteMail(req, user, "otp", "https://dashboard.insidec.org/auth/callback", external))
+	ts.Contains(projectMail.body, "Project specific invite")
+	ts.Contains(projectMail.body, "invite_token=override-token")
+
+	defaultMail := &recordingMailClient{}
+	mailer = templatemailer.New(ts.Config, defaultMail, templatemailer.NewCache())
+	ts.Require().NoError(mailer.InviteMail(req, other, "otp", "https://dashboard.insidec.org/auth/callback", external))
+	ts.Contains(defaultMail.body, "Accept invitation")
+	ts.NotContains(defaultMail.body, "Project specific invite")
+}
+
+func (ts *InviteTestSuite) TestInviteMailInvalidProjectThemeUsesDefault() {
+	ts.Config.External.Email.Enabled = false
+	ts.Config.External.Google.Enabled = true
+
+	base := ts.T().TempDir()
+	ts.Require().NoError(os.MkdirAll(filepath.Join(base, "brawler"), 0o755))
+	ts.Require().NoError(os.WriteFile(filepath.Join(base, "brawler", "theme.yaml"), []byte(":\n- bad"), 0o644))
+	ts.Config.Mailer.Templates.ProjectDir = base
+
+	user, err := models.NewUser("", "broken@example.com", "", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
+	ts.Require().NoError(err)
+	user.ConfirmationToken = "broken-token"
+
+	cache := templatemailer.NewCache()
+	cache.ProjectNameLookup = func(_ context.Context, _ uuid.UUID) (string, error) {
+		return "BRAWLER", nil
+	}
+
+	recorder := &recordingMailClient{}
+	mailer := templatemailer.New(ts.Config, recorder, cache)
+	external, err := url.Parse("http://localhost:9999")
+	ts.Require().NoError(err)
+	req := httptest.NewRequest(http.MethodPost, "/invite", nil)
+	ts.Require().NoError(mailer.InviteMail(req, user, "otp", "https://dashboard.insidec.org/auth/callback", external))
+	ts.Contains(recorder.body, "Accept invitation")
 }

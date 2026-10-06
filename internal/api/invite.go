@@ -20,6 +20,11 @@ type InviteParams struct {
 	ProjectID      uuid.UUID              `json:"project_id"`
 }
 
+type inviteResponse struct {
+	*models.User
+	InviteToken string `json:"invite_token"`
+}
+
 // Invite is the endpoint for inviting a new user
 func (a *API) Invite(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
@@ -37,8 +42,12 @@ func (a *API) Invite(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
+	if params.OrganizationID == uuid.Nil && params.ProjectID == uuid.Nil {
+		return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "project_id or organization_id must be provided")
+	}
+
 	aud := a.requestAud(ctx, r)
-	user, err := models.FindUserByEmailAndAudience(db, params.Email, aud, params.OrganizationID, uuid.Nil)
+	user, err := models.FindUserByEmailAndAudience(db, params.Email, aud, params.OrganizationID, params.ProjectID)
 	if err != nil && !models.IsNotFoundError(err) {
 		return apierrors.NewInternalServerError("Database error finding user").WithInternalError(err)
 	}
@@ -110,5 +119,8 @@ func (a *API) Invite(w http.ResponseWriter, r *http.Request) error {
 	if err := a.triggerAfterUserCreated(r, db, user); err != nil {
 		return err
 	}
-	return sendJSON(w, http.StatusOK, user)
+	return sendJSON(w, http.StatusOK, &inviteResponse{
+		User:        user,
+		InviteToken: user.ConfirmationToken,
+	})
 }

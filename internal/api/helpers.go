@@ -79,6 +79,7 @@ type RequestParams interface {
 		RefreshTokenGrantParams |
 		ResendConfirmationParams |
 		SignupParams |
+		WhitelistParams |
 		SingleSignOnParams |
 		SmsParams |
 		Web3GrantParams |

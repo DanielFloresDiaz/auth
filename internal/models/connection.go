@@ -36,6 +36,7 @@ type SortField struct {
 func TruncateAll(conn *storage.Connection) error {
 	return conn.Transaction(func(tx *storage.Connection) error {
 		tables := []string{
+			"whitelist_requests",
 			(&pop.Model{Value: Project{}}).TableName(),
 			(&pop.Model{Value: Organization{}}).TableName(),
 			(&pop.Model{Value: OrganizationTier{}}).TableName(),

@@ -68,12 +68,15 @@ func (a *API) GetExternalProviderRedirectURL(w http.ResponseWriter, r *http.Requ
 	inviteToken := query.Get("invite_token")
 	if inviteToken != "" {
 		query.Del("invite_token")
-		_, userErr := models.FindUserByConfirmationToken(db, inviteToken)
+		invitedUser, userErr := models.FindUserByConfirmationToken(db, inviteToken)
 		if userErr != nil {
 			if models.IsNotFoundError(userErr) {
 				return "", apierrors.NewNotFoundError(apierrors.ErrorCodeUserNotFound, "User identified by token not found")
 			}
 			return "", apierrors.NewInternalServerError("Database error finding user").WithInternalError(userErr)
+		}
+		if err := validateInviteAcceptance(invitedUser, config.Mailer.OtpExp); err != nil {
+			return "", err
 		}
 	}
 
@@ -97,7 +100,9 @@ func (a *API) GetExternalProviderRedirectURL(w http.ResponseWriter, r *http.Requ
 		query.Del("project_id")
 	}
 
-	if err != nil && err2 != nil {
+	// Invite links identify the user by invite_token. Project and organization
+	// are already stored on that row, so the query parameters are optional.
+	if err != nil && err2 != nil && (inviteToken == "" || isPKCEFlow(flowType)) {
 		return "", apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Invalid organization_id or project_id")
 	}
 
@@ -492,12 +497,16 @@ func (a *API) processInvite(r *http.Request, tx *storage.Connection, userData *p
 		}
 		return nil, apierrors.NewInternalServerError("Database error finding user").WithInternalError(err)
 	}
+	if err := validateInviteAcceptance(user, config.Mailer.OtpExp); err != nil {
+		return nil, err
+	}
 
+	invited := strings.ToLower(strings.TrimSpace(user.GetEmail()))
 	var emailData *provider.Email
 	var emails []string
 	for i, e := range userData.Emails {
 		emails = append(emails, e.Email)
-		if user.GetEmail() == e.Email {
+		if strings.ToLower(strings.TrimSpace(e.Email)) == invited && e.Verified {
 			emailData = &userData.Emails[i]
 			break
 		}

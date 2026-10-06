@@ -156,7 +156,12 @@ func (a *API) verifyGet(w http.ResponseWriter, r *http.Request, params *VerifyPa
 			return terr
 		}
 		switch params.Type {
-		case mail.SignupVerification, mail.InviteVerification:
+		case mail.SignupVerification:
+			user, terr = a.signupVerify(r, ctx, tx, user)
+		case mail.InviteVerification:
+			if !a.config.External.Email.Enabled {
+				return apierrors.NewForbiddenError(apierrors.ErrorCodeOTPExpired, "Email link is invalid or has expired")
+			}
 			user, terr = a.signupVerify(r, ctx, tx, user)
 		case mail.RecoveryVerification, mail.MagicLinkVerification:
 			user, terr = a.recoverVerify(r, tx, user)
@@ -260,7 +265,12 @@ func (a *API) verifyPost(w http.ResponseWriter, r *http.Request, params *VerifyP
 		}
 
 		switch params.Type {
-		case mail.SignupVerification, mail.InviteVerification:
+		case mail.SignupVerification:
+			user, terr = a.signupVerify(r, ctx, tx, user)
+		case mail.InviteVerification:
+			if !a.config.External.Email.Enabled {
+				return apierrors.NewForbiddenError(apierrors.ErrorCodeOTPExpired, "Email link is invalid or has expired")
+			}
 			user, terr = a.signupVerify(r, ctx, tx, user)
 		case mail.RecoveryVerification, mail.MagicLinkVerification:
 			user, terr = a.recoverVerify(r, tx, user)
