@@ -112,3 +112,10 @@ GRANT SELECT, UPDATE ON "auth".whitelist_requests TO solomon_auth_admin_role;
 --comment: grant whitelist inserts to auth_admin when that role exists
 GRANT INSERT, SELECT ON "auth".whitelist_requests TO auth_admin;
 --rollback REVOKE INSERT, SELECT ON "auth".whitelist_requests FROM auth_admin;
+
+--changeset solomon.auth:grant:13 labels:auth context:auth
+--preconditions onFail:MARK_RAN
+--precondition-sql-check expectedResult:1 SELECT COUNT(*) FROM pg_roles WHERE rolname = 'auth_admin'
+--comment: grant whitelist confirmation writes to auth_admin when that role exists
+GRANT INSERT, SELECT, UPDATE, DELETE ON "auth".whitelist_confirmations TO auth_admin;
+--rollback REVOKE INSERT, SELECT, UPDATE, DELETE ON "auth".whitelist_confirmations FROM auth_admin;
