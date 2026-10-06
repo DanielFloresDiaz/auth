@@ -28,11 +28,11 @@ func TestWhitelistConfirmedPageProjectTheme(t *testing.T) {
 	cfg := &conf.GlobalConfiguration{}
 	projectID := uuid.Must(uuid.NewV4())
 	base := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(base, "iec"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(base, "iec"), 0o750))
 	require.NoError(t, os.WriteFile(filepath.Join(base, "iec", projectThemeFileName), []byte(`copy:
   whitelist_confirmed:
     lead: Project recorded themed lead.
-`), 0o644))
+`), 0o600))
 	cfg.Mailer.Templates.ProjectDir = base
 
 	cache := NewCache()

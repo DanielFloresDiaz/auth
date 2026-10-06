@@ -25,13 +25,13 @@ func TestProjectTemplatePathRejectsTraversal(t *testing.T) {
 func TestThemeForProjectUsesProjectDirThemeYAML(t *testing.T) {
 	projectID := uuid.Must(uuid.NewV4())
 	base := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(base, "zion"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(base, "zion"), 0o750))
 	themeYAML := `brand:
   product_name: Custom Zion
 colors:
   accent: "#E6A815"
 `
-	require.NoError(t, os.WriteFile(filepath.Join(base, "zion", projectThemeFileName), []byte(themeYAML), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(base, "zion", projectThemeFileName), []byte(themeYAML), 0o600))
 
 	cfg := &conf.GlobalConfiguration{}
 	cfg.Mailer.Templates.ProjectDir = base
@@ -51,7 +51,7 @@ colors:
 func TestThemeForProjectMissingFileReturnsDefault(t *testing.T) {
 	projectID := uuid.Must(uuid.NewV4())
 	base := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(base, "brawler"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(base, "brawler"), 0o750))
 
 	cfg := &conf.GlobalConfiguration{}
 	cfg.Mailer.Templates.ProjectDir = base
@@ -69,8 +69,8 @@ func TestThemeForProjectMissingFileReturnsDefault(t *testing.T) {
 func TestThemeForProjectInvalidYAMLReturnsDefault(t *testing.T) {
 	projectID := uuid.Must(uuid.NewV4())
 	base := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(base, "iec"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(base, "iec", projectThemeFileName), []byte(":\n- bad"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(base, "iec"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(base, "iec", projectThemeFileName), []byte(":\n- bad"), 0o600))
 
 	cfg := &conf.GlobalConfiguration{}
 	cfg.Mailer.Templates.ProjectDir = base

@@ -560,11 +560,11 @@ func (ts *InviteTestSuite) TestInviteMailProjectTheme() {
 	ts.Config.External.Google.Enabled = true
 
 	base := ts.T().TempDir()
-	ts.Require().NoError(os.MkdirAll(filepath.Join(base, "brawler"), 0o755))
+	ts.Require().NoError(os.MkdirAll(filepath.Join(base, "brawler"), 0o750))
 	ts.Require().NoError(os.WriteFile(filepath.Join(base, "brawler", "theme.yaml"), []byte(`copy:
   invite:
     intro: Project specific invite
-`), 0o644))
+`), 0o600))
 	ts.Config.Mailer.Templates.ProjectDir = base
 
 	user, err := models.NewUser("", "override@example.com", "", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
@@ -602,8 +602,8 @@ func (ts *InviteTestSuite) TestInviteMailInvalidProjectThemeUsesDefault() {
 	ts.Config.External.Google.Enabled = true
 
 	base := ts.T().TempDir()
-	ts.Require().NoError(os.MkdirAll(filepath.Join(base, "brawler"), 0o755))
-	ts.Require().NoError(os.WriteFile(filepath.Join(base, "brawler", "theme.yaml"), []byte(":\n- bad"), 0o644))
+	ts.Require().NoError(os.MkdirAll(filepath.Join(base, "brawler"), 0o750))
+	ts.Require().NoError(os.WriteFile(filepath.Join(base, "brawler", "theme.yaml"), []byte(":\n- bad"), 0o600))
 	ts.Config.Mailer.Templates.ProjectDir = base
 
 	user, err := models.NewUser("", "broken@example.com", "", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)

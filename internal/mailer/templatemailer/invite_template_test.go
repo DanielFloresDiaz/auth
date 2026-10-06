@@ -55,13 +55,13 @@ func TestInviteMailProjectTheme(t *testing.T) {
 
 	projectID := uuid.Must(uuid.NewV4())
 	base := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(base, "brawler"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(base, "brawler"), 0o750))
 	require.NoError(t, os.WriteFile(filepath.Join(base, "brawler", projectThemeFileName), []byte(`brand:
   product_name: Themed Product
 copy:
   invite:
     intro: Project specific invite body copy.
-`), 0o644))
+`), 0o600))
 	cfg.Mailer.Templates.ProjectDir = base
 
 	user, err := models.NewUser("", "override@example.com", "", "authenticated", nil, uuid.Must(uuid.NewV4()), projectID)
@@ -97,7 +97,7 @@ copy:
 func TestEmbeddedProductThemesLoadFromRepo(t *testing.T) {
 	dir := filepath.Join("..", "..", "..", "templates")
 	for _, slug := range []string{"brawler", "zion", "iec"} {
-		raw, err := os.ReadFile(filepath.Join(dir, slug, projectThemeFileName))
+		raw, err := os.ReadFile(filepath.Join(dir, slug, projectThemeFileName)) // #nosec G304 -- reads known embedded theme fixtures from repo templates/
 		require.NoError(t, err, slug)
 		var partial ProjectTheme
 		require.NoError(t, yaml.Unmarshal(raw, &partial), slug)

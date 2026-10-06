@@ -36,7 +36,7 @@ func TestWhitelistConfirmationMailProjectTheme(t *testing.T) {
 
 	projectID := uuid.Must(uuid.NewV4())
 	base := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(base, "zion"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(base, "zion"), 0o750))
 	require.NoError(t, os.WriteFile(filepath.Join(base, "zion", projectThemeFileName), []byte(`brand:
   product_name: Zion
 colors:
@@ -44,7 +44,7 @@ colors:
 copy:
   whitelist_confirmation:
     intro: Project specific access request copy.
-`), 0o644))
+`), 0o600))
 	cfg.Mailer.Templates.ProjectDir = base
 
 	cache := NewCache()
