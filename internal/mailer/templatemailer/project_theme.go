@@ -389,7 +389,7 @@ func (o *Cache) themeForProject(ctx context.Context, cfg *conf.GlobalConfigurati
 		return cached.theme
 	}
 
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- path is constrained under projectDir by projectTemplatePath
 	if err != nil {
 		o.storeProjectTheme(projectID, &projectThemeCacheEntry{modUnix: modUnix, invalid: true})
 		logProjectThemeError(ctx, projectID, err)

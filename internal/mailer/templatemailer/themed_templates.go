@@ -11,7 +11,7 @@ import (
 
 var themedTemplateFuncs = htmltemplate.FuncMap{
 	"css": func(v string) htmltemplate.CSS {
-		return htmltemplate.CSS(v)
+		return htmltemplate.CSS(v) // #nosec G203 -- theme.yaml supplies intentional CSS for mail templates
 	},
 }
 
