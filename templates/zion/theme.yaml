@@ -1,0 +1,57 @@
+color_scheme: dark
+colors:
+  page_bg: "#0E0C08"
+  card_bg: "#17150F"
+  card_border: "#3a3426"
+  text: "#FFFFFF"
+  muted: "#B5B0A4"
+  subtle: "#8a8478"
+  accent: "#E6A815"
+  accent_bar: "#E6A815"
+  email_bg: "#0E0C08"
+  email_border: "#3a3426"
+  eyebrow: "#E6A815"
+  step_accent: "#E6A815"
+  button_bg: "#E6A815"
+  button_text: "#0A0604"
+  link: "#E6A815"
+  footer_muted: "#8a8478"
+  divider_border: "#3a3426"
+  card_shadow: "0 8px 32px rgba(0, 0, 0, 0.35)"
+  provider_hover: "0 6px 18px rgba(0, 0, 0, 0.28)"
+fonts:
+  eyebrow: "'IBM Plex Mono',ui-monospace,Consolas,monospace"
+  heading: "Archivo,'Source Sans 3',Segoe UI,Helvetica,Arial,sans-serif"
+  body: "'Source Sans 3',Segoe UI,Helvetica,Arial,sans-serif"
+brand:
+  product_name: Zion
+  tagline: One API in front of every model you use.
+copy:
+  invite:
+    title: You have been invited to Zion
+    preheader: "You were invited to Zion for {{ .Email }}. Accept the invitation and sign in with Google or GitHub to access the inference platform."
+    eyebrow: Inference platform
+    intro: "You&rsquo;ve been invited to create a Zion account. Use the button below to continue&mdash;on the next page you&rsquo;ll sign in with Google or GitHub so we can link your workspace to the right identity."
+    step1: Open your personal invitation link.
+    step2: "Sign in with Google or GitHub using {{ .Email }}."
+    step3: "Start routing requests through Zion&rsquo;s unified API."
+    footer: "Zion sent this invitation to {{ .Email }}. The link is for that address only. If you weren&rsquo;t expecting access to Zion, you can ignore this email&mdash;no account will be created without your sign-in."
+  accept_invite:
+    title: Accept invitation — Zion
+    eyebrow: Inference platform
+    lead: "You opened a valid Zion invitation. Sign in with a provider that uses the email below&mdash;we&rsquo;ll create your account and return you to the app."
+    step1: Choose Google or GitHub.
+    step2: Confirm access with your identity provider.
+    step3: "Start sending traffic through Zion&rsquo;s unified API."
+    footer: This page completes your Zion invitation only. If you didn&rsquo;t expect access, close this window.
+  whitelist_confirmation:
+    title: Confirm your Zion access request
+    preheader: "Confirm the Zion access request for {{ .Email }}. A project admin reviews it only after you open this link."
+    eyebrow: Inference platform
+    intro: Someone used this email address to request access to Zion. Use the button below to confirm it so a project admin can review the request.
+    footer: "Zion sent this message because {{ .Email }} was used to request access. The link is for that address only. If you did not ask for this, you can ignore this email&mdash;no request will be recorded without your confirmation."
+  whitelist_confirmed:
+    title: Access request recorded — Zion
+    eyebrow: Inference platform
+    lead: Your Zion access request was recorded. A project admin reviews it from here.
+    footer: "This page confirms the Zion request for {{ .Email }} only. If you did not ask for access, you can close this window."

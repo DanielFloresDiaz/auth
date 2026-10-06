@@ -1,0 +1,57 @@
+color_scheme: light
+colors:
+  page_bg: "#d9dcd6"
+  card_bg: "#f7f8f5"
+  card_border: "#c5d0dc"
+  text: "#111112"
+  muted: "#3c4650"
+  subtle: "#5c6772"
+  accent: "#2f6690"
+  accent_bar: "#2f6690"
+  email_bg: "#ffffff"
+  email_border: "#c5d0dc"
+  eyebrow: "#2f6690"
+  step_accent: "#2f6690"
+  button_bg: "#2f6690"
+  button_text: "#ffffff"
+  link: "#2f6690"
+  footer_muted: "#5c6772"
+  divider_border: "#c5d0dc"
+  card_shadow: "0 4px 24px rgba(17, 17, 18, 0.08)"
+  provider_hover: "0 6px 16px rgba(0, 0, 0, 0.1)"
+fonts:
+  eyebrow: "'IBM Plex Mono',ui-monospace,Consolas,monospace"
+  heading: "Archivo,'Source Sans 3',Segoe UI,Helvetica,Arial,sans-serif"
+  body: "'Source Sans 3',Segoe UI,Helvetica,Arial,sans-serif"
+brand:
+  product_name: Insidec
+  tagline: One sentence replaces the entire filter panel.
+copy:
+  invite:
+    title: You have been invited to Insidec
+    preheader: "You were invited to Insidec for {{ .Email }}. Accept the invitation and sign in with Google or GitHub to join your team."
+    eyebrow: Knowledge graph search for e-commerce
+    intro: "You&rsquo;ve been invited to create an Insidec account. Tap the button below to continue&mdash;you&rsquo;ll sign in with Google or GitHub on the next screen so we can connect you to the right catalog workspace."
+    step1: Open your secure invitation link.
+    step2: "Sign in with Google or GitHub using {{ .Email }}."
+    step3: Explore search and merchandising tools in your Insidec project.
+    footer: "Insidec sent this invitation to {{ .Email }}. The link is for that address only. If you weren&rsquo;t expecting access, you can ignore this email&mdash;no account will be created without your sign-in."
+  accept_invite:
+    title: Accept invitation — Insidec
+    eyebrow: Knowledge graph search for e-commerce
+    lead: "You opened a valid Insidec invitation. Sign in with a provider that uses the email below&mdash;we&rsquo;ll connect you to the right catalog workspace."
+    step1: Choose Google or GitHub.
+    step2: Confirm access with your identity provider.
+    step3: Explore search and merchandising in your project.
+    footer: This page completes your Insidec invitation only. If you didn&rsquo;t expect access, close this window.
+  whitelist_confirmation:
+    title: Confirm your Insidec access request
+    preheader: "Confirm the Insidec access request for {{ .Email }}. A project admin reviews it only after you open this link."
+    eyebrow: Knowledge graph search for e-commerce
+    intro: Someone used this email address to request access to Insidec. Use the button below to confirm it so a project admin can review the request.
+    footer: "Insidec sent this message because {{ .Email }} was used to request access. The link is for that address only. If you did not ask for this, you can ignore this email&mdash;no request will be recorded without your confirmation."
+  whitelist_confirmed:
+    title: Access request recorded — Insidec
+    eyebrow: Knowledge graph search for e-commerce
+    lead: Your Insidec access request was recorded. A project admin reviews it from here.
+    footer: "This page confirms the Insidec request for {{ .Email }} only. If you did not ask for access, you can close this window."

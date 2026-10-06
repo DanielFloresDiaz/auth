@@ -1,0 +1,58 @@
+color_scheme: dark
+colors:
+  page_bg: "#0e1218"
+  card_bg: "#151b25"
+  card_border: "#2a3544"
+  text: "#f3f5f8"
+  muted: "#8b95a8"
+  subtle: "#6d7789"
+  accent: "#ff8000"
+  accent_bar: "#ff8000"
+  email_bg: "#0e1218"
+  email_border: "#2a3544"
+  eyebrow: "#ff8000"
+  step_accent: "#ff8000"
+  button_bg: "#ff8000"
+  button_text: "#14120e"
+  link: "#ff8000"
+  footer_muted: "#6d7789"
+  divider_border: "#2a3544"
+  card_shadow: "0 8px 32px rgba(0, 0, 0, 0.3)"
+  provider_hover: "0 6px 18px rgba(0, 0, 0, 0.28)"
+fonts:
+  eyebrow: "'IBM Plex Mono',ui-monospace,Consolas,monospace"
+  heading: "Archivo,'Source Sans 3',Segoe UI,Helvetica,Arial,sans-serif"
+  body: "'Source Sans 3',Segoe UI,Helvetica,Arial,sans-serif"
+brand:
+  product_name: Brawler
+  tagline: Agents that keep getting better.
+copy:
+  invite:
+    title: You have been invited to Brawler
+    preheader: "You were invited to Brawler for {{ .Email }}. Accept the invitation and sign in with Google or GitHub to join your team."
+    eyebrow: AgentOps for production teams
+    intro: "You&rsquo;ve been invited to create a Brawler account. Use the button below to continue&mdash;on the next page you&rsquo;ll sign in with Google or GitHub so we can add you to the right production workspace."
+    step1: Open your personal invitation link.
+    step2: "Sign in with Google or GitHub using {{ .Email }}."
+    step3: Ship and monitor agents with your team in Brawler.
+    footer: "Brawler sent this invitation to {{ .Email }}. The link is for that address only. If you weren&rsquo;t expecting access, you can ignore this email&mdash;no account will be created without your sign-in."
+  accept_invite:
+    title: Accept invitation — Brawler
+    eyebrow: AgentOps for production teams
+    lead: "You opened a valid Brawler invitation. Sign in with a provider that uses the email below&mdash;we&rsquo;ll add you to the right workspace and send you back to the app."
+    step1: Choose Google or GitHub.
+    step2: Confirm access with your identity provider.
+    step3: Ship and monitor agents with your team.
+    footer: This page completes your Brawler invitation only. If you didn&rsquo;t expect access, close this window.
+  whitelist_confirmation:
+    title: Confirm your Brawler access request
+    preheader: "Confirm the Brawler access request for {{ .Email }}. A project admin reviews it only after you open this link."
+    eyebrow: AgentOps for production teams
+    intro: Someone used this email address to request access to Brawler. Use the button below to confirm it so a project admin can review the request.
+    footer: "Brawler sent this message because {{ .Email }} was used to request access. The link is for that address only. If you did not ask for this, you can ignore this email&mdash;no request will be recorded without your confirmation."
+  whitelist_confirmed:
+    title: Access request recorded — Brawler
+    eyebrow: AgentOps for production teams
+    headline: Access request recorded
+    lead: Your Brawler access request was recorded. A project admin reviews it from here.
+    footer: "This page confirms the Brawler request for {{ .Email }} only. If you did not ask for access, close this window."
