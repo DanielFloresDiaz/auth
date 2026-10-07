@@ -17,6 +17,9 @@ endif
 
 DEV_DOCKER_COMPOSE:=docker-compose.yml
 
+export POSTGRES_HOST ?= localhost
+export POSTGRES_PORT ?= 5437
+
 help: ## Show this help.
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {sub("\\\\n",sprintf("\n%22c"," "), $$2);printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
@@ -77,16 +80,21 @@ down: ## Shutdown the development containers
 	# Start postgres first and apply migrations
 	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) down -v
 
+postgres-ready: ## Wait until the development postgres container accepts connections
+	@until ${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) exec -T postgres pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
+
 docker-test: ## Run the tests using the development containers
 	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) up -d postgres
-	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) run auth sh -c "make migrate_test"
-	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) run auth sh -c "make test"
+	$(MAKE) postgres-ready
+	$(MAKE) migrate_test
+	$(MAKE) test
 	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) down -v
 
 docker-build: ## Force a full rebuild of the development containers
 	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) build --no-cache
 	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) up -d postgres
-	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) run auth sh -c "make migrate_dev"
+	$(MAKE) postgres-ready
+	$(MAKE) migrate_dev
 	${DOCKER_COMPOSE} -f $(DEV_DOCKER_COMPOSE) down
 
 docker-clean: ## Remove the development containers and volumes
