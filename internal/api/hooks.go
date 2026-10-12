@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/fatih/structs"
+	"github.com/gofrs/uuid"
 	"github.com/supabase/auth/internal/api/apierrors"
 	"github.com/supabase/auth/internal/api/provider"
 	"github.com/supabase/auth/internal/hooks/v0hooks"
@@ -54,6 +55,8 @@ func (a *API) triggerBeforeUserCreatedExternal(
 	db *storage.Connection,
 	userData *provider.UserProvidedData,
 	providerType string,
+	organizationID uuid.UUID,
+	projectID uuid.UUID,
 ) error {
 	if !a.hooksMgr.Enabled(v0hooks.BeforeUserCreated) {
 		return nil
@@ -65,9 +68,6 @@ func (a *API) triggerBeforeUserCreatedExternal(
 	ctx := r.Context()
 	aud := a.requestAud(ctx, r)
 	config := a.config
-
-	organizationID := getOrganizationID(ctx)
-	projectID := getProjectID(ctx)
 
 	var identityData map[string]interface{}
 	if userData.Metadata != nil {
@@ -102,16 +102,15 @@ func (a *API) triggerBeforeUserCreatedExternal(
 	}
 
 	params := &SignupParams{
-		Provider: providerType,
-		Email:    decision.CandidateEmail.Email,
-		Aud:      aud,
-		Data:     identityData,
+		Provider:       providerType,
+		Email:          decision.CandidateEmail.Email,
+		Aud:            aud,
+		Data:           identityData,
+		OrganizationID: organizationID,
+		ProjectID:      projectID,
 	}
 
-	isSSOUser := false
-	if strings.HasPrefix(decision.LinkingDomain, "sso:") {
-		isSSOUser = true
-	}
+	isSSOUser := strings.HasPrefix(decision.LinkingDomain, "sso:")
 
 	user, err := params.ToUserModel(isSSOUser)
 	if err != nil {

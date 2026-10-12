@@ -11,9 +11,34 @@ import (
 	"github.com/stretchr/testify/suite"
 	"github.com/supabase/auth/internal/api/provider"
 	"github.com/supabase/auth/internal/conf"
+	"github.com/supabase/auth/internal/conf/confload"
 	"github.com/supabase/auth/internal/storage"
 	"github.com/supabase/auth/internal/storage/test"
 )
+
+func TestGetAccountLinkingDomain(t *testing.T) {
+	// provider names are matched exactly. A builtin provider (github) and a
+	// custom provider (custom:google) can share the same domain; the "custom:"
+	// prefix is part of the key.
+	linkingDomains := map[string]string{
+		"github":        "social",
+		"custom:google": "social",
+	}
+
+	// SSO providers always get their own isolated domain (the provider id).
+	require.Equal(t, "sso:abc", GetAccountLinkingDomain("sso:abc", linkingDomains))
+
+	// Providers sharing a linking domain resolve to that shared domain.
+	require.Equal(t, "social", GetAccountLinkingDomain("github", linkingDomains))
+	require.Equal(t, "social", GetAccountLinkingDomain("custom:google", linkingDomains))
+
+	// A bare name is not the same key as its "custom:"-prefixed form.
+	require.Equal(t, "default", GetAccountLinkingDomain("custom:github", linkingDomains))
+
+	// Providers without a linking domain fall back to the default email-linked pool.
+	require.Equal(t, "default", GetAccountLinkingDomain("apple", linkingDomains))
+	require.Equal(t, "default", GetAccountLinkingDomain("github", nil))
+}
 
 type AccountLinkingTestSuite struct {
 	suite.Suite
@@ -24,12 +49,18 @@ type AccountLinkingTestSuite struct {
 	ProjectID      uuid.UUID
 }
 
+func (ts *AccountLinkingTestSuite) resetTenant() {
+	ts.T().Helper()
+	require.NoError(ts.T(), TruncateAll(ts.db))
+	ReseedTestTenant(ts.T(), ts.db, ts.OrganizationID, ts.ProjectID)
+}
+
 func (ts *AccountLinkingTestSuite) SetupTest() {
 	ts.ProjectID, ts.OrganizationID, _ = InitializeTestDatabase(ts.T(), ts.db, ts.config)
 }
 
 func TestAccountLinking(t *testing.T) {
-	globalConfig, err := conf.LoadGlobal(modelsTestConfig)
+	globalConfig, err := confload.LoadGlobal(modelsTestConfig)
 	require.NoError(t, err)
 
 	conn, err := test.SetupDBConnection(globalConfig)
@@ -283,9 +314,155 @@ func (ts *AccountLinkingTestSuite) TestLinkingScenarios() {
 
 }
 
-// TestSameIdentityAcrossDifferentProjects verifies that the same external identity
-// (e.g. one Google account) can sign in to two different projects without hitting
-// a duplicate-key error on the identities table.
+func (ts *AccountLinkingTestSuite) TestSharedLinkingDomainLinking() {
+	// a builtin provider (github) and a custom provider (custom:google) share the
+	// "social" linking domain: they link to one another but stay isolated from
+	// the default email-linked pool and from SSO. Mixing the two forms shows that
+	// both a bare name and a colon-bearing "custom:" name are matched exactly.
+	prevLinkingDomains := ts.config.Experimental.ProviderLinkingDomains
+	ts.config.Experimental.ProviderLinkingDomains = map[string]string{
+		"github":        "social",
+		"custom:google": "social",
+	}
+	defer func() { ts.config.Experimental.ProviderLinkingDomains = prevLinkingDomains }()
+
+	const sharedEmail = "shared@example.com"
+
+	ts.Run("custom:google login links into existing github account in the same domain", func() {
+		ts.resetTenant()
+
+		githubUser, err := NewUser("", sharedEmail, "", "authenticated", nil, ts.OrganizationID, ts.ProjectID)
+		require.NoError(ts.T(), err)
+		require.NoError(ts.T(), ts.db.Create(githubUser))
+		githubIdentity, err := NewIdentity(githubUser, "github", map[string]interface{}{
+			"sub":   githubUser.ID.String(),
+			"email": sharedEmail,
+		})
+		require.NoError(ts.T(), err)
+		require.NoError(ts.T(), ts.db.Create(githubIdentity))
+
+		decision, err := DetermineAccountLinking(ts.db, ts.config, []provider.Email{
+			{Email: sharedEmail, Verified: true, Primary: true},
+		}, ts.config.JWT.Aud, "custom:google", "google-sub", ts.OrganizationID, ts.ProjectID)
+		require.NoError(ts.T(), err)
+
+		require.Equal(ts.T(), LinkAccount, decision.Decision)
+		require.Equal(ts.T(), githubUser.ID, decision.User.ID)
+		require.Equal(ts.T(), "social", decision.LinkingDomain)
+	})
+
+	ts.Run("google login does not link into a default email-only account", func() {
+		ts.resetTenant()
+
+		emailUser, err := NewUser("", sharedEmail, "", "authenticated", nil, ts.OrganizationID, ts.ProjectID)
+		require.NoError(ts.T(), err)
+		require.NoError(ts.T(), ts.db.Create(emailUser))
+		emailIdentity, err := NewIdentity(emailUser, "email", map[string]interface{}{
+			"sub":   emailUser.ID.String(),
+			"email": sharedEmail,
+		})
+		require.NoError(ts.T(), err)
+		require.NoError(ts.T(), ts.db.Create(emailIdentity))
+
+		decision, err := DetermineAccountLinking(ts.db, ts.config, []provider.Email{
+			{Email: sharedEmail, Verified: true, Primary: true},
+		}, ts.config.JWT.Aud, "custom:google", "google-sub", ts.OrganizationID, ts.ProjectID)
+		require.NoError(ts.T(), err)
+
+		// must create a brand new account in the "social" linking domain, never
+		// link to the default email-linked user
+		require.Equal(ts.T(), CreateAccount, decision.Decision)
+		require.Equal(ts.T(), "social", decision.LinkingDomain)
+	})
+
+	ts.Run("google login does not link into an SSO account", func() {
+		ts.resetTenant()
+
+		ssoProvider := "sso:f06f9e3d-ff92-4c47-a179-7acf1fda6387"
+		ssoUser, err := NewUser("", sharedEmail, "", "authenticated", nil, ts.OrganizationID, ts.ProjectID)
+		require.NoError(ts.T(), err)
+		require.NoError(ts.T(), ts.db.Create(ssoUser))
+		ssoIdentity, err := NewIdentity(ssoUser, ssoProvider, map[string]interface{}{
+			"sub":   ssoUser.ID.String(),
+			"email": sharedEmail,
+		})
+		require.NoError(ts.T(), err)
+		require.NoError(ts.T(), ts.db.Create(ssoIdentity))
+
+		decision, err := DetermineAccountLinking(ts.db, ts.config, []provider.Email{
+			{Email: sharedEmail, Verified: true, Primary: true},
+		}, ts.config.JWT.Aud, "custom:google", "google-sub", ts.OrganizationID, ts.ProjectID)
+		require.NoError(ts.T(), err)
+
+		require.Equal(ts.T(), CreateAccount, decision.Decision)
+		require.Equal(ts.T(), "social", decision.LinkingDomain)
+	})
+}
+
+func (ts *AccountLinkingTestSuite) TestOwnLinkingDomainLegacyBackfillUnchanged() {
+	// Regression: a legacy deployment configured with
+	// GOTRUE_EXPERIMENTAL_PROVIDERS_WITH_OWN_LINKING_DOMAIN="github" must behave
+	// identically after the migration. ApplyDefaults backfills the deprecated
+	// list into ProviderLinkingDomains as {github: github}.
+	prevLinkingDomains := ts.config.Experimental.ProviderLinkingDomains
+	prevLegacy := ts.config.Experimental.ProvidersWithOwnLinkingDomain
+	ts.config.Experimental.ProviderLinkingDomains = nil
+	ts.config.Experimental.ProvidersWithOwnLinkingDomain = []string{"github"}
+	require.NoError(ts.T(), ts.config.ApplyDefaults())
+	require.Equal(ts.T(), "github", ts.config.Experimental.ProviderLinkingDomains["github"])
+	defer func() {
+		ts.config.Experimental.ProviderLinkingDomains = prevLinkingDomains
+		ts.config.Experimental.ProvidersWithOwnLinkingDomain = prevLegacy
+	}()
+
+	const githubEmail = "githubonly@example.com"
+
+	ts.Run("github stays isolated from a default email-only account", func() {
+		ts.resetTenant()
+
+		emailUser, err := NewUser("", githubEmail, "", "authenticated", nil, ts.OrganizationID, ts.ProjectID)
+		require.NoError(ts.T(), err)
+		require.NoError(ts.T(), ts.db.Create(emailUser))
+		emailIdentity, err := NewIdentity(emailUser, "email", map[string]interface{}{
+			"sub":   emailUser.ID.String(),
+			"email": githubEmail,
+		})
+		require.NoError(ts.T(), err)
+		require.NoError(ts.T(), ts.db.Create(emailIdentity))
+
+		decision, err := DetermineAccountLinking(ts.db, ts.config, []provider.Email{
+			{Email: githubEmail, Verified: true, Primary: true},
+		}, ts.config.JWT.Aud, "github", "github-sub", ts.OrganizationID, ts.ProjectID)
+		require.NoError(ts.T(), err)
+
+		require.Equal(ts.T(), CreateAccount, decision.Decision)
+		require.Equal(ts.T(), "github", decision.LinkingDomain)
+	})
+
+	ts.Run("github links into existing github account with the same email", func() {
+		ts.resetTenant()
+
+		githubUser, err := NewUser("", githubEmail, "", "authenticated", nil, ts.OrganizationID, ts.ProjectID)
+		require.NoError(ts.T(), err)
+		require.NoError(ts.T(), ts.db.Create(githubUser))
+		githubIdentity, err := NewIdentity(githubUser, "github", map[string]interface{}{
+			"sub":   githubUser.ID.String(),
+			"email": githubEmail,
+		})
+		require.NoError(ts.T(), err)
+		require.NoError(ts.T(), ts.db.Create(githubIdentity))
+
+		decision, err := DetermineAccountLinking(ts.db, ts.config, []provider.Email{
+			{Email: githubEmail, Verified: true, Primary: true},
+		}, ts.config.JWT.Aud, "github", "another-github-sub", ts.OrganizationID, ts.ProjectID)
+		require.NoError(ts.T(), err)
+
+		require.Equal(ts.T(), LinkAccount, decision.Decision)
+		require.Equal(ts.T(), githubUser.ID, decision.User.ID)
+		require.Equal(ts.T(), "github", decision.LinkingDomain)
+	})
+}
+
 func (ts *AccountLinkingTestSuite) TestSameIdentityAcrossDifferentProjects() {
 	// Create a second project using the postgres superuser (same as InitializeTestDatabase).
 	projectBID := uuid.Must(uuid.NewV4())

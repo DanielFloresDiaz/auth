@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	PKCEPrefix                    = "pkce_"
+	PKCEPrefix                    = models.PKCEPrefix
 	MinCodeChallengeLength        = 43
 	MaxCodeChallengeLength        = 128
 	InvalidPKCEParamsErrorMessage = "PKCE flow requires code_challenge_method and code_challenge"
@@ -46,11 +46,14 @@ func issueAuthCode(tx *storage.Connection, user *models.User, authenticationMeth
 	} else if err != nil {
 		return "", err
 	}
+	if !flowState.IsPKCE() {
+		return "", apierrors.NewUnprocessableEntityError(apierrors.ErrorCodeFlowStateNotFound, "Flow state does not have an auth code (not a PKCE flow).")
+	}
 	if err := flowState.RecordAuthCodeIssuedAtTime(tx); err != nil {
 		return "", err
 	}
 
-	return flowState.AuthCode, nil
+	return *flowState.AuthCode, nil
 }
 
 func isPKCEFlow(flowType models.FlowType) bool {
@@ -84,16 +87,21 @@ func getFlowFromChallenge(codeChallenge string) models.FlowType {
 	}
 }
 
-// Should only be used with Auth Code of PKCE Flows
-func generateFlowState(tx *storage.Connection, providerType string, authenticationMethod models.AuthenticationMethod, codeChallengeMethodParam string, codeChallenge string, userID *uuid.UUID, organization_id uuid.UUID, project_id uuid.UUID) (*models.FlowState, error) {
-	codeChallengeMethod, err := models.ParseCodeChallengeMethod(codeChallengeMethodParam)
+func generateFlowState(tx *storage.Connection, providerType string, authenticationMethod models.AuthenticationMethod, codeChallengeMethod string, codeChallenge string, userID *uuid.UUID, organization_id uuid.UUID, project_id uuid.UUID) (*models.FlowState, error) {
+	flowState, err := models.NewFlowState(models.FlowStateParams{
+		ProviderType:         providerType,
+		AuthenticationMethod: authenticationMethod,
+		CodeChallenge:        codeChallenge,
+		CodeChallengeMethod:  codeChallengeMethod,
+		UserID:               userID,
+		OrganizationID:       uuid.NullUUID{UUID: organization_id, Valid: organization_id != uuid.Nil},
+		ProjectID:            project_id,
+	})
 	if err != nil {
 		return nil, err
 	}
-	flowState := models.NewFlowState(providerType, codeChallenge, codeChallengeMethod, authenticationMethod, userID, organization_id, project_id)
 	if err := tx.Create(flowState); err != nil {
 		return nil, err
 	}
 	return flowState, nil
-
 }

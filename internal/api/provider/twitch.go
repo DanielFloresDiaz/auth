@@ -75,8 +75,12 @@ func NewTwitchProvider(ext conf.OAuthProviderConfiguration, scopes string) (OAut
 	}, nil
 }
 
-func (t twitchProvider) GetOAuthToken(code string) (*oauth2.Token, error) {
-	return t.Exchange(context.Background(), code)
+func (t twitchProvider) GetOAuthToken(ctx context.Context, code string, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
+	return t.Exchange(ctx, code, opts...)
+}
+
+func (t twitchProvider) RequiresPKCE() bool {
+	return false
 }
 
 func (t twitchProvider) GetUserData(ctx context.Context, tok *oauth2.Token) (*UserProvidedData, error) {
@@ -90,7 +94,7 @@ func (t twitchProvider) GetUserData(ctx context.Context, tok *oauth2.Token) (*Us
 	}
 
 	// set headers
-	req.Header.Set("Client-Id", t.Config.ClientID)
+	req.Header.Set("Client-Id", t.ClientID)
 	req.Header.Set("Authorization", "Bearer "+tok.AccessToken)
 
 	client := &http.Client{Timeout: defaultTimeout}

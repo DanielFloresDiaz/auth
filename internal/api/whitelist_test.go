@@ -165,7 +165,7 @@ func TestWhitelistExpiredConfirmationDoesNotInsert(t *testing.T) {
 	w := postWhitelist(api, body)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	expiredAt := time.Now().Add(-time.Duration(config.Mailer.OtpExp+60) * time.Second)
+	expiredAt := time.Now().Add(-(config.Mailer.OtpExpAsDuration() + 60*time.Second))
 	require.NoError(t, api.db.RawQuery(
 		`UPDATE auth.whitelist_confirmations SET sent_at = ? WHERE project_id = ? AND lower(email) = ?`,
 		expiredAt,

@@ -59,6 +59,7 @@ func TestAcceptInviteRendersProviderChoices(t *testing.T) {
 	api.handler.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 	require.Contains(t, w.Body.String(), "Sign in with Google")
 	require.Contains(t, w.Body.String(), "Sign in with GitHub")
 	require.Contains(t, w.Body.String(), "provider=google")
@@ -101,7 +102,7 @@ func TestAcceptInviteRejectsExpiredAndBannedTokens(t *testing.T) {
 	projectID, organizationID, _ := InitializeTestDatabase(t, api, config)
 
 	expired := createInvitedUserForTest(t, api, organizationID, projectID, "expired-invite@example.com", "expired-invite-token")
-	sentAt := time.Now().Add(-time.Duration(config.Mailer.OtpExp+60) * time.Second)
+	sentAt := time.Now().Add(-(config.Mailer.OtpExpAsDuration() + 60*time.Second))
 	expired.ConfirmationSentAt = &sentAt
 	require.NoError(t, api.db.UpdateOnly(expired, "confirmation_sent_at"))
 
@@ -136,7 +137,7 @@ func TestAuthorizeRejectsExpiredAndBannedInviteTokens(t *testing.T) {
 	projectID, organizationID, _ := InitializeTestDatabase(t, api, config)
 
 	expired := createInvitedUserForTest(t, api, organizationID, projectID, "expired-authorize@example.com", "expired-authorize-token")
-	sentAt := time.Now().Add(-time.Duration(config.Mailer.OtpExp+60) * time.Second)
+	sentAt := time.Now().Add(-(config.Mailer.OtpExpAsDuration() + 60*time.Second))
 	expired.ConfirmationSentAt = &sentAt
 	require.NoError(t, api.db.UpdateOnly(expired, "confirmation_sent_at"))
 
@@ -173,7 +174,7 @@ func createInvitedUserForTest(t *testing.T, api *API, organizationID, projectID 
 	user.ConfirmationToken = confirmationToken
 	user.ConfirmationSentAt = &now
 	require.NoError(t, api.db.Create(user))
-	require.NoError(t, models.CreateOneTimeToken(api.db, user.ID, email, user.ConfirmationToken, models.ConfirmationToken))
+	require.NoError(t, models.CreateOneTimeToken(api.db, user.ID, email, user.ConfirmationToken, models.ConfirmationToken, api.config.Mailer.OtpExpAsDuration(), true))
 
 	identity, err := models.NewIdentity(user, "email", map[string]interface{}{
 		"sub":   user.ID.String(),

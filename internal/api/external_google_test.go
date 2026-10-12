@@ -7,10 +7,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 
-	"github.com/supabase/auth/internal/api/provider"
-
-	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
+	"github.com/supabase/auth/internal/api/provider"
 )
 
 const (
@@ -36,15 +34,7 @@ func (ts *ExternalTestSuite) TestSignupExternalGoogle() {
 	ts.Equal("code", q.Get("response_type"))
 	ts.Equal("email profile", q.Get("scope"))
 
-	claims := ExternalProviderClaims{}
-	p := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Name}))
-	_, err = p.ParseWithClaims(q.Get("state"), &claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(ts.Config.JWT.Secret), nil
-	})
-	ts.Require().NoError(err)
-
-	ts.Equal("google", claims.Provider)
-	ts.Equal(ts.Config.SiteURL, claims.SiteURL)
+	assertValidOAuthState(ts, q.Get("state"), "google")
 }
 
 func GoogleTestSignupSetup(ts *ExternalTestSuite, tokenCount *int, userCount *int, code string, user string) *httptest.Server {

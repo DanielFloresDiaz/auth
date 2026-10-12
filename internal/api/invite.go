@@ -60,7 +60,7 @@ func (a *API) Invite(w http.ResponseWriter, r *http.Request) error {
 			Email:          params.Email,
 			Data:           params.Data,
 			Aud:            aud,
-			Provider:       "email",
+			Provider:       EmailProvider,
 			OrganizationID: params.OrganizationID,
 			ProjectID:      params.ProjectID,
 		}
@@ -89,7 +89,7 @@ func (a *API) Invite(w http.ResponseWriter, r *http.Request) error {
 			if err != nil {
 				return err
 			}
-			identity, err := a.createNewIdentity(tx, user, "email", structs.Map(provider.Claims{
+			identity, err := a.createNewIdentity(tx, user, EmailProvider, structs.Map(provider.Claims{
 				Subject: user.ID.String(),
 				Email:   user.GetEmail(),
 			}),

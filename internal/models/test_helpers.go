@@ -65,3 +65,42 @@ func InitializeTestDatabase(t *testing.T, db *storage.Connection, config *conf.G
 
 	return project_id, organization_id, user
 }
+
+// ReseedTestTenant recreates the project and organization after TruncateAll.
+// TruncateAll removes tenant rows, and later inserts still reference the ids
+// the test suite captured during setup.
+func ReseedTestTenant(t *testing.T, db *storage.Connection, organizationID, projectID uuid.UUID) {
+	t.Helper()
+
+	superuserURL := db.URL()
+	if u, err := url.Parse(db.URL()); err == nil {
+		u.User = url.UserPassword("postgres", "root")
+		superuserURL = u.String()
+	}
+	superuserDB, err := pop.NewConnection(&pop.ConnectionDetails{
+		Dialect: "postgres",
+		URL:     superuserURL,
+	})
+	require.NoError(t, err)
+	require.NoError(t, superuserDB.Open())
+	defer superuserDB.Close()
+	setupDB := &storage.Connection{Connection: superuserDB}
+
+	require.NoError(t, setupDB.RawQuery(
+		"INSERT INTO auth.projects (id, name) VALUES (?, ?) ON CONFLICT (id) DO NOTHING",
+		projectID, "test_project_"+projectID.String(),
+	).Exec())
+
+	admin, err := NewUser("", "reseed-admin+"+projectID.String()+"@example.com", "test", "authenticated", nil, uuid.Nil, projectID)
+	require.NoError(t, err)
+	require.NoError(t, db.Create(admin, "organization_id", "organization_role"))
+
+	require.NoError(t, setupDB.RawQuery(
+		"INSERT INTO auth.organizations (id, name, project_id, admin_id) VALUES (?, ?, ?, ?) ON CONFLICT (id) DO NOTHING",
+		organizationID, "test_organization_"+organizationID.String(), projectID, admin.ID,
+	).Exec())
+	require.NoError(t, setupDB.RawQuery(
+		"INSERT INTO auth.organizations_tier (organization_id, project_id, tier) VALUES (?, ?, 'free') ON CONFLICT (organization_id, project_id) DO NOTHING",
+		organizationID, projectID,
+	).Exec())
+}

@@ -11,6 +11,7 @@ import (
 	"github.com/gofrs/uuid"
 	"github.com/supabase/auth/internal/api/apierrors"
 	"github.com/supabase/auth/internal/api/shared"
+	"github.com/supabase/auth/internal/metering"
 	"github.com/supabase/auth/internal/models"
 	"github.com/supabase/auth/internal/observability"
 	"github.com/supabase/auth/internal/storage"
@@ -18,10 +19,11 @@ import (
 	"github.com/supabase/auth/internal/utilities"
 )
 
-// OAuth 2.1 Grant Types
+// OAuth 2.1 Grant Types, aliased from internal/tokens so the OAuth server's grant type
+// dispatch and its metering events share one source of truth.
 const (
-	GrantTypeAuthorizationCode = "authorization_code"
-	GrantTypeRefreshToken      = "refresh_token"
+	GrantTypeAuthorizationCode = tokens.GrantTypeAuthorizationCode
+	GrantTypeRefreshToken      = tokens.GrantTypeRefreshToken
 )
 
 // OAuthServerClientResponse represents the response format for OAuth client operations
@@ -51,24 +53,13 @@ type OAuthServerClientListResponse struct {
 
 // oauthServerClientToResponse converts a model to response format
 func oauthServerClientToResponse(client *models.OAuthServerClient) *OAuthServerClientResponse {
-	// Set token endpoint auth methods based on client type
-	var tokenEndpointAuthMethods string
-	// TODO(cemal) :: Remove this once we have the token endpoint auth method stored in the database
-	if client.IsPublic() {
-		// Public clients don't use client authentication
-		tokenEndpointAuthMethods = models.TokenEndpointAuthMethodNone
-	} else {
-		// Confidential clients use client secret authentication
-		tokenEndpointAuthMethods = models.TokenEndpointAuthMethodClientSecretBasic
-	}
-
 	response := &OAuthServerClientResponse{
 		ClientID:   client.ID.String(),
 		ClientType: client.ClientType,
 
 		// OAuth 2.1 DCR fields
 		RedirectURIs:            client.GetRedirectURIs(),
-		TokenEndpointAuthMethod: tokenEndpointAuthMethods,
+		TokenEndpointAuthMethod: client.GetTokenEndpointAuthMethod(),
 		GrantTypes:              client.GetGrantTypes(),
 		ResponseTypes:           []string{"code"}, // Always "code" in OAuth 2.1
 		ClientName:              utilities.StringValue(client.ClientName),
@@ -405,6 +396,13 @@ func (s *Server) handleAuthorizationCodeGrant(ctx context.Context, w http.Respon
 	grantParams.Scopes = &scopes
 
 	err = db.Transaction(func(tx *storage.Connection) error {
+		if _, terr := models.FindOAuthServerAuthorizationByIDForUpdate(tx, authorization.AuthorizationID); terr != nil {
+			if models.IsNotFoundError(terr) {
+				return apierrors.NewOAuthError("invalid_grant", "Invalid authorization code")
+			}
+			return apierrors.NewInternalServerError("Error locking authorization code").WithInternalError(terr)
+		}
+
 		authMethod := models.OAuthProviderAuthorizationCode
 
 		// Create audit log entry for OAuth token exchange
@@ -435,6 +433,9 @@ func (s *Server) handleAuthorizationCodeGrant(ctx context.Context, w http.Respon
 		if httpErr, ok := err.(*apierrors.HTTPError); ok {
 			return httpErr
 		}
+		if oauthErr, ok := err.(*apierrors.OAuthError); ok {
+			return oauthErr
+		}
 		return apierrors.NewInternalServerError("Error exchanging authorization code").WithInternalError(err)
 	}
 
@@ -446,7 +447,7 @@ func (s *Server) handleAuthorizationCodeGrant(ctx context.Context, w http.Respon
 			nonce = *authorization.Nonce
 		}
 
-		idToken, err := tokenService.GenerateIDToken(tokens.GenerateIDTokenParams{
+		idToken, err := tokenService.GenerateIDToken(ctx, tokens.GenerateIDTokenParams{
 			User:     user,
 			ClientID: client.ID,
 			Nonce:    nonce,
@@ -459,6 +460,13 @@ func (s *Server) handleAuthorizationCodeGrant(ctx context.Context, w http.Respon
 
 		tokenResponse.IDToken = idToken
 	}
+
+	metering.RecordLogin(metering.LoginTypeOAuthServer, user.ID, &metering.LoginData{
+		OAuthServer: &metering.OAuthServerData{
+			ClientID:  client.ID.String(),
+			GrantType: GrantTypeAuthorizationCode,
+		},
+	})
 
 	// Convert to OAuth-compliant response format (exclude user info for OAuth clients)
 	oauthResponse := map[string]interface{}{

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gofrs/uuid"
 	"github.com/supabase/auth/internal/api/apierrors"
 	"github.com/supabase/auth/internal/api/provider"
 	"github.com/supabase/auth/internal/metering"
@@ -17,9 +18,11 @@ import (
 )
 
 type Web3GrantParams struct {
-	Message   string `json:"message,omitempty"`
-	Signature string `json:"signature,omitempty"`
-	Chain     string `json:"chain,omitempty"`
+	Message        string    `json:"message,omitempty"`
+	Signature      string    `json:"signature,omitempty"`
+	Chain          string    `json:"chain,omitempty"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ProjectID      uuid.UUID `json:"project_id"`
 }
 
 func (a *API) Web3Grant(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -39,16 +42,29 @@ func (a *API) Web3Grant(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		if !config.External.Web3Solana.Enabled {
 			return apierrors.NewUnprocessableEntityError(apierrors.ErrorCodeWeb3ProviderDisabled, "Solana Web3 provider is disabled")
 		}
+		if err := params.requireTenant(); err != nil {
+			return err
+		}
 		return a.web3GrantSolana(ctx, w, r, params)
 	case "ethereum":
 		if !config.External.Web3Ethereum.Enabled {
 			return apierrors.NewUnprocessableEntityError(apierrors.ErrorCodeWeb3ProviderDisabled, "Ethereum Web3 provider is disabled")
+		}
+		if err := params.requireTenant(); err != nil {
+			return err
 		}
 		return a.web3GrantEthereum(ctx, w, r, params)
 	default:
 		return apierrors.NewBadRequestError(apierrors.ErrorCodeWeb3UnsupportedChain, "Unsupported chain")
 	}
 
+}
+
+func (p *Web3GrantParams) requireTenant() error {
+	if p.ProjectID == uuid.Nil && p.OrganizationID == uuid.Nil {
+		return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Organization ID or Project ID is required")
+	}
+	return nil
 }
 
 func (a *API) web3GrantSolana(ctx context.Context, w http.ResponseWriter, r *http.Request, params *Web3GrantParams) error {
@@ -114,7 +130,7 @@ func (a *API) web3GrantSolana(ctx context.Context, w http.ResponseWriter, r *htt
 		return apierrors.NewOAuthError("invalid_grant", "Solana message was issued too far in the future")
 	}
 
-	const providerType = "web3"
+	const providerType = Web3Provider
 	providerId := strings.Join([]string{
 		providerType,
 		params.Chain,
@@ -140,18 +156,15 @@ func (a *API) web3GrantSolana(ctx context.Context, w http.ResponseWriter, r *htt
 	var grantParams models.GrantParams
 	grantParams.FillGrantParams(r)
 
-	if err := a.triggerBeforeUserCreatedExternal(r, db, &userData, providerType); err != nil {
+	if err := a.triggerBeforeUserCreatedExternal(r, db, &userData, providerType, params.OrganizationID, params.ProjectID); err != nil {
 		return err
 	}
-
-	organization_id := getOrganizationID(ctx)
-	project_id := getProjectID(ctx)
 
 	var user *models.User
 	err = db.Transaction(func(tx *storage.Connection) error {
 		var terr error
 		var decision models.AccountLinkingDecision
-		decision, user, terr = a.createAccountFromExternalIdentity(tx, r, &userData, providerType, true, organization_id, project_id)
+		decision, user, terr = a.createAccountFromExternalIdentity(tx, r, &userData, providerType, true, params.OrganizationID, params.ProjectID)
 		if terr != nil {
 			return terr
 		}
@@ -168,7 +181,7 @@ func (a *API) web3GrantSolana(ctx context.Context, w http.ResponseWriter, r *htt
 			return terr
 		}
 
-		token, terr = a.issueRefreshToken(r, tx, user, models.Web3, grantParams)
+		token, terr = a.issueRefreshToken(r, w.Header(), tx, user, models.Web3, grantParams)
 		if terr != nil {
 			return terr
 		}
@@ -263,7 +276,7 @@ func (a *API) web3GrantEthereum(ctx context.Context, w http.ResponseWriter, r *h
 		return apierrors.NewOAuthError("invalid_grant", "Ethereum message was issued too far in the future")
 	}
 
-	const providerType = "web3"
+	const providerType = Web3Provider
 	providerId := strings.Join([]string{
 		providerType,
 		params.Chain,
@@ -289,18 +302,15 @@ func (a *API) web3GrantEthereum(ctx context.Context, w http.ResponseWriter, r *h
 	var grantParams models.GrantParams
 	grantParams.FillGrantParams(r)
 
-	if err := a.triggerBeforeUserCreatedExternal(r, db, &userData, providerType); err != nil {
+	if err := a.triggerBeforeUserCreatedExternal(r, db, &userData, providerType, params.OrganizationID, params.ProjectID); err != nil {
 		return err
 	}
-
-	organization_id := getOrganizationID(ctx)
-	project_id := getProjectID(ctx)
 
 	var user *models.User
 	err = db.Transaction(func(tx *storage.Connection) error {
 		var terr error
 		var decision models.AccountLinkingDecision
-		decision, user, terr = a.createAccountFromExternalIdentity(tx, r, &userData, providerType, true, organization_id, project_id)
+		decision, user, terr = a.createAccountFromExternalIdentity(tx, r, &userData, providerType, true, params.OrganizationID, params.ProjectID)
 		if terr != nil {
 			return terr
 		}
@@ -317,7 +327,7 @@ func (a *API) web3GrantEthereum(ctx context.Context, w http.ResponseWriter, r *h
 			return terr
 		}
 
-		token, terr = a.issueRefreshToken(r, tx, user, models.Web3, grantParams)
+		token, terr = a.issueRefreshToken(r, w.Header(), tx, user, models.Web3, grantParams)
 		if terr != nil {
 			return terr
 		}

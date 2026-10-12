@@ -15,20 +15,34 @@ import (
 
 var EmbeddedMigrations embed.FS
 
+var migrateVerbose bool
+
 var migrateCmd = cobra.Command{
 	Use:  "migrate",
 	Long: "Migrate database strucutures. This will create new tables and add missing columns and indexes.",
 	Run:  migrate,
 }
 
+func popProgressLogger(lvl logging.Level, s string, args ...interface{}) {
+	if lvl == logging.SQL || lvl == logging.Debug {
+		return
+	}
+	if len(args) > 0 {
+		s = fmt.Sprintf(s, args...)
+	}
+	fmt.Println(s)
+}
+
+func popNoopLogger(logging.Level, string, ...interface{}) {}
+
 func migrate(cmd *cobra.Command, args []string) {
 	globalConfig := loadGlobalConfig(cmd.Context())
+	u, err := url.Parse(globalConfig.DB.URL)
+	if err != nil {
+		logrus.Fatalf("%+v", errors.Wrap(err, "parsing db connection url"))
+	}
 
 	if globalConfig.DB.Driver == "" && globalConfig.DB.URL != "" {
-		u, err := url.Parse(globalConfig.DB.URL)
-		if err != nil {
-			logrus.Fatalf("%+v", errors.Wrap(err, "parsing db connection url"))
-		}
 		globalConfig.DB.Driver = u.Scheme
 	}
 
@@ -41,28 +55,23 @@ func migrate(cmd *cobra.Command, args []string) {
 			log.Fatalf("Failed to parse log level: %+v", err)
 		}
 		log.SetLevel(level)
-		if level == logrus.DebugLevel {
-			// Set to true to display query info
-			pop.Debug = true
-		}
-		if level != logrus.DebugLevel {
-			var noopLogger = func(lvl logging.Level, s string, args ...interface{}) {
-			}
-			// Hide pop migration logging
-			pop.SetLogger(noopLogger)
-		}
 	}
 
-	u, _ := url.Parse(globalConfig.DB.URL)
-	processedUrl := globalConfig.DB.URL
-	if len(u.Query()) != 0 {
-		processedUrl = fmt.Sprintf("%s&application_name=gotrue_migrations", processedUrl)
-	} else {
-		processedUrl = fmt.Sprintf("%s?application_name=gotrue_migrations", processedUrl)
+	switch {
+	case log.Level == logrus.DebugLevel:
+		pop.Debug = true
+	case migrateVerbose:
+		pop.SetLogger(popProgressLogger)
+	case globalConfig.Logging.Level != "":
+		pop.SetLogger(popNoopLogger)
 	}
+
+	q := u.Query()
+	q.Add("application_name", "auth_migrations")
+	u.RawQuery = q.Encode()
 	deets := &pop.ConnectionDetails{
 		Dialect: globalConfig.DB.Driver,
-		URL:     processedUrl,
+		URL:     u.String(),
 	}
 	deets.Options = map[string]string{
 		"migration_table_name": "schema_migrations",

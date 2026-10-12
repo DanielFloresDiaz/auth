@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	"github.com/supabase/auth/internal/api/apierrors"
 	"github.com/supabase/auth/internal/conf"
+	"github.com/supabase/auth/internal/crypto"
 	"github.com/supabase/auth/internal/models"
 )
 
@@ -180,6 +181,148 @@ func (ts *AdminTestSuite) TestAdminUsers_SortDesc() {
 	assert.Equal(ts.T(), "test1@example.com", data.Users[2].GetEmail())
 }
 
+type adminUsersCursorResponse struct {
+	Users      []*models.User            `json:"users"`
+	Aud        string                    `json:"aud"`
+	Pagination *CursorPaginationResponse `json:"pagination"`
+}
+
+// TestAdminUsers_CursorPaginationDisabled ensures that with the flag off the
+// endpoint serves the unchanged offset response (X-Total-Count set, no
+// pagination block) even when a client passes cursor-style params.
+func (ts *AdminTestSuite) TestAdminUsers_CursorPaginationDisabled() {
+	ts.Config.Experimental.CursorPaginationEnabled = false
+
+	u, err := models.NewUser("", "test1@example.com", "test", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
+	require.NoError(ts.T(), err)
+	require.NoError(ts.T(), ts.API.db.Create(u))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/admin/users?limit=1", nil)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ts.token))
+
+	ts.API.handler.ServeHTTP(w, req)
+	require.Equal(ts.T(), http.StatusOK, w.Code)
+
+	// The created user plus the seeded project admin.
+	assert.Equal(ts.T(), "2", w.Header().Get("X-Total-Count"))
+	assert.NotContains(ts.T(), w.Header().Get("Link"), `rel="next"`)
+
+	var data adminUsersCursorResponse
+	require.NoError(ts.T(), json.NewDecoder(w.Body).Decode(&data))
+	assert.Nil(ts.T(), data.Pagination, "offset mode must not emit a pagination block")
+}
+
+// TestAdminUsers_CursorPaginationEnabled walks every page with cursor mode on
+// and asserts full coverage with no duplicates or skips.
+func (ts *AdminTestSuite) TestAdminUsers_CursorPaginationEnabled() {
+	ts.Config.Experimental.CursorPaginationEnabled = true
+	defer func() { ts.Config.Experimental.CursorPaginationEnabled = false }()
+
+	const total = 5
+	want := map[string]bool{}
+	for i := 0; i < total; i++ {
+		email := fmt.Sprintf("cursor%d@example.com", i)
+		u, err := models.NewUser("", email, "test", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
+		require.NoError(ts.T(), err)
+		require.NoError(ts.T(), ts.API.db.Create(u))
+		want[email] = true
+	}
+	want["admin@example.com"] = true
+
+	seen := map[string]bool{}
+	cursor := ""
+	sawNextLink := false
+	for page := 0; page < 20; page++ {
+		target := "/admin/users?limit=2"
+		if cursor != "" {
+			target += "&cursor=" + cursor
+		}
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ts.token))
+
+		ts.API.handler.ServeHTTP(w, req)
+		require.Equal(ts.T(), http.StatusOK, w.Code)
+
+		// offset-only headers must be absent in cursor mode
+		assert.Empty(ts.T(), w.Header().Get("X-Total-Count"))
+
+		var data adminUsersCursorResponse
+		require.NoError(ts.T(), json.NewDecoder(w.Body).Decode(&data))
+		require.NotNil(ts.T(), data.Pagination)
+
+		for _, u := range data.Users {
+			require.False(ts.T(), seen[u.GetEmail()], "user returned twice: %s", u.GetEmail())
+			seen[u.GetEmail()] = true
+		}
+
+		if data.Pagination.HasMore {
+			require.NotEmpty(ts.T(), data.Pagination.NextCursor)
+			require.Contains(ts.T(), w.Header().Get("Link"), `rel="next"`)
+			sawNextLink = true
+			cursor = data.Pagination.NextCursor
+			continue
+		}
+
+		require.Empty(ts.T(), data.Pagination.NextCursor)
+		assert.NotContains(ts.T(), w.Header().Get("Link"), `rel="next"`)
+		break
+	}
+
+	require.Equal(ts.T(), want, seen, "cursor walk must cover every user exactly once")
+	require.True(ts.T(), sawNextLink, "expected at least one intermediate page with a next cursor")
+}
+
+// TestAdminUsers_CursorPaginationBackwardCompat ensures that even with the flag
+// on, a client that still pages by number stays in offset mode.
+func (ts *AdminTestSuite) TestAdminUsers_CursorPaginationBackwardCompat() {
+	ts.Config.Experimental.CursorPaginationEnabled = true
+	defer func() { ts.Config.Experimental.CursorPaginationEnabled = false }()
+
+	for i := 0; i < 2; i++ {
+		u, err := models.NewUser("", fmt.Sprintf("compat%d@example.com", i), "test", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
+		require.NoError(ts.T(), err)
+		require.NoError(ts.T(), ts.API.db.Create(u))
+	}
+
+	// either offset-style param must keep the request in offset mode, even
+	// with the flag on
+	for _, target := range []string{
+		"/admin/users?page=1&per_page=1",
+		"/admin/users?per_page=1",
+	} {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ts.token))
+
+		ts.API.handler.ServeHTTP(w, req)
+		require.Equal(ts.T(), http.StatusOK, w.Code)
+
+		// Two created users plus the seeded project admin.
+		assert.Equal(ts.T(), "3", w.Header().Get("X-Total-Count"), "offset mode expected for %s", target)
+
+		var data adminUsersCursorResponse
+		require.NoError(ts.T(), json.NewDecoder(w.Body).Decode(&data))
+		assert.Nil(ts.T(), data.Pagination)
+		require.Len(ts.T(), data.Users, 1, "per_page must be honored for %s", target)
+	}
+}
+
+// TestAdminUsers_CursorPaginationBadCursor ensures a malformed cursor is a 400.
+func (ts *AdminTestSuite) TestAdminUsers_CursorPaginationBadCursor() {
+	ts.Config.Experimental.CursorPaginationEnabled = true
+	defer func() { ts.Config.Experimental.CursorPaginationEnabled = false }()
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/admin/users?cursor=not-a-valid-cursor*", nil)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ts.token))
+
+	ts.API.handler.ServeHTTP(w, req)
+	require.Equal(ts.T(), http.StatusBadRequest, w.Code)
+}
+
 // TestAdminUsers tests API /admin/users route
 func (ts *AdminTestSuite) TestAdminUsers_FilterEmail() {
 	u, err := models.NewUser("", "test1@example.com", "test", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
@@ -245,7 +388,7 @@ func (ts *AdminTestSuite) TestAdminUserCreate() {
 			desc: "Only phone",
 			params: map[string]interface{}{
 				"phone":      "123456789",
-				"password":   "test1",
+				"password":   "test123",
 				"project_id": ts.ProjectID.String(),
 			},
 			expected: map[string]interface{}{
@@ -254,7 +397,7 @@ func (ts *AdminTestSuite) TestAdminUserCreate() {
 				"isAuthenticated": true,
 				"provider":        "phone",
 				"providers":       []string{"phone"},
-				"password":        "test1",
+				"password":        "test123",
 			},
 		},
 		{
@@ -262,7 +405,7 @@ func (ts *AdminTestSuite) TestAdminUserCreate() {
 			params: map[string]interface{}{
 				"email":      "test1@example.com",
 				"phone":      "123456789",
-				"password":   "test1",
+				"password":   "test123",
 				"project_id": ts.ProjectID.String(),
 			},
 			expected: map[string]interface{}{
@@ -271,7 +414,7 @@ func (ts *AdminTestSuite) TestAdminUserCreate() {
 				"isAuthenticated": true,
 				"provider":        "email",
 				"providers":       []string{"email", "phone"},
-				"password":        "test1",
+				"password":        "test123",
 			},
 		},
 		{
@@ -311,7 +454,7 @@ func (ts *AdminTestSuite) TestAdminUserCreate() {
 			params: map[string]interface{}{
 				"email":        "test4@example.com",
 				"phone":        "",
-				"password":     "test1",
+				"password":     "test123",
 				"ban_duration": "24h",
 				"project_id":   ts.ProjectID.String(),
 			},
@@ -321,7 +464,7 @@ func (ts *AdminTestSuite) TestAdminUserCreate() {
 				"isAuthenticated": true,
 				"provider":        "email",
 				"providers":       []string{"email"},
-				"password":        "test1",
+				"password":        "test123",
 			},
 		},
 		{
@@ -345,7 +488,7 @@ func (ts *AdminTestSuite) TestAdminUserCreate() {
 			params: map[string]interface{}{
 				"id":         "fc56ab41-2010-4870-a9b9-767c1dc573fb",
 				"email":      "test6@example.com",
-				"password":   "test",
+				"password":   "test123",
 				"project_id": ts.ProjectID.String(),
 			},
 			expected: map[string]interface{}{
@@ -355,7 +498,7 @@ func (ts *AdminTestSuite) TestAdminUserCreate() {
 				"isAuthenticated": true,
 				"provider":        "email",
 				"providers":       []string{"email"},
-				"password":        "test",
+				"password":        "test123",
 			},
 		},
 	}
@@ -508,6 +651,105 @@ func (ts *AdminTestSuite) TestAdminUserUpdate() {
 	}
 }
 
+// TestAdminUserUpdateClearsPendingTokensOnEmailChange verifies that
+// reassigning a user's email via the admin update endpoint invalidates any
+// outstanding recovery token, so a recovery link issued before the change
+// (and still deliverable to the old mailbox) can no longer be redeemed.
+func (ts *AdminTestSuite) TestAdminUserUpdateClearsPendingTokensOnEmailChange() {
+	u, err := models.NewUser("", "pending-tokens@example.com", "test", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
+	require.NoError(ts.T(), err, "Error making new user")
+	require.NoError(ts.T(), ts.API.db.Create(u), "Error creating user")
+
+	// simulate an outstanding password-recovery token
+	recoveryHash := crypto.GenerateTokenHash(u.GetEmail(), "123456")
+	now := time.Now()
+	u.RecoveryToken = recoveryHash
+	u.RecoverySentAt = &now
+	require.NoError(ts.T(), ts.API.db.UpdateOnly(u, "recovery_token", "recovery_sent_at"))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), recoveryHash, models.RecoveryToken, ts.Config.Mailer.OtpExpAsDuration(), true))
+
+	// sanity check: the token is redeemable before the email change
+	_, err = models.FindUserByOneTimeToken(ts.API.db, recoveryHash, models.RecoveryToken)
+	require.NoError(ts.T(), err, "recovery token should be redeemable before the email change")
+
+	var buffer bytes.Buffer
+	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
+		"email": "pending-tokens-new@example.com",
+	}))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/admin/users/%s", u.ID), &buffer)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ts.token))
+	ts.API.handler.ServeHTTP(w, req)
+	require.Equal(ts.T(), http.StatusOK, w.Code)
+
+	// the stored recovery token column must be cleared
+	updated, err := models.FindUserByID(ts.API.db, u.ID)
+	require.NoError(ts.T(), err)
+	require.Empty(ts.T(), updated.RecoveryToken, "recovery token should be cleared after an admin email change")
+
+	// and the one-time token row must no longer resolve to a user
+	_, err = models.FindUserByOneTimeToken(ts.API.db, recoveryHash, models.RecoveryToken)
+	require.Error(ts.T(), err, "recovery token should no longer be redeemable after an admin email change")
+	require.True(ts.T(), models.IsNotFoundError(err), "expected NotFoundError")
+}
+
+// TestAdminUserCreatePasswordStrength verifies POST /admin/users enforces the
+// configured password strength policy on a client-supplied plaintext
+// password, matching the update endpoint, while leaving the password_hash
+// path exempt.
+func (ts *AdminTestSuite) TestAdminUserCreatePasswordStrength() {
+	ts.Config.Password.MinLength = 6
+
+	ts.Run("weak plaintext password is rejected", func() {
+		var buffer bytes.Buffer
+		require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
+			"email":    "weakpw@example.com",
+			"password": "12345", // below MinLength of 6
+		}))
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/admin/users", &buffer)
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ts.token))
+		ts.API.handler.ServeHTTP(w, req)
+		require.Equal(ts.T(), http.StatusUnprocessableEntity, w.Code)
+
+		// the user must not have been created
+		_, err := models.FindUserByEmailAndAudience(ts.API.db, "weakpw@example.com", ts.Config.JWT.Aud, ts.OrganizationID, ts.ProjectID)
+		require.True(ts.T(), models.IsNotFoundError(err), "weak-password create should not have persisted a user")
+	})
+
+	ts.Run("strong plaintext password is accepted", func() {
+		var buffer bytes.Buffer
+		require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
+			"email":    "strongpw@example.com",
+			"password": "a-sufficiently-long-password",
+		}))
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/admin/users", &buffer)
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ts.token))
+		ts.API.handler.ServeHTTP(w, req)
+		require.Equal(ts.T(), http.StatusOK, w.Code)
+	})
+
+	ts.Run("password_hash path is exempt from the strength policy", func() {
+		var buffer bytes.Buffer
+		// bcrypt hash of a short password: the plaintext strength policy
+		// does not (and cannot) apply to a pre-hashed credential.
+		require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
+			"email":         "hashedpw@example.com",
+			"password_hash": "$2y$10$Tk6yEdmTbb/eQ/haDMaCsuCsmtPVprjHMcij1RqiJdLGPDXnL3L1a",
+		}))
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/admin/users", &buffer)
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ts.token))
+		ts.API.handler.ServeHTTP(w, req)
+		require.Equal(ts.T(), http.StatusOK, w.Code)
+	})
+}
+
 func (ts *AdminTestSuite) TestAdminUserUpdatePasswordFailed() {
 	u, err := models.NewUser("12345678", "test1@example.com", "test", ts.Config.JWT.Aud, nil, ts.OrganizationID, ts.ProjectID)
 	require.NoError(ts.T(), err, "Error making new user")
@@ -654,11 +896,11 @@ func (ts *AdminTestSuite) TestAdminUserSoftDeletion() {
 		"provider": "email",
 	}
 	require.NoError(ts.T(), ts.API.db.Create(u, "organization_role"))
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.ConfirmationToken, models.ConfirmationToken))
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.RecoveryToken, models.RecoveryToken))
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.EmailChangeTokenCurrent, models.EmailChangeTokenCurrent))
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.EmailChangeTokenNew, models.EmailChangeTokenNew))
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetPhone(), u.PhoneChangeToken, models.PhoneChangeToken))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.ConfirmationToken, models.ConfirmationToken, ts.Config.Mailer.OtpExpAsDuration(), true))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.RecoveryToken, models.RecoveryToken, ts.Config.Mailer.OtpExpAsDuration(), true))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.EmailChangeTokenCurrent, models.EmailChangeTokenCurrent, ts.Config.Mailer.OtpExpAsDuration(), true))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.EmailChangeTokenNew, models.EmailChangeTokenNew, ts.Config.Mailer.OtpExpAsDuration(), true))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetPhone(), u.PhoneChangeToken, models.PhoneChangeToken, ts.Config.Mailer.OtpExpAsDuration(), true))
 
 	// create user identities
 	_, err = ts.API.createNewIdentity(ts.API.db, u, "email", map[string]interface{}{
@@ -671,6 +913,16 @@ func (ts *AdminTestSuite) TestAdminUserSoftDeletion() {
 		"email": "test@example.com",
 	})
 	require.NoError(ts.T(), err)
+
+	// register a WebAuthn credential for the user
+	passkey := &models.WebAuthnCredential{
+		ID:           uuid.Must(uuid.NewV4()),
+		UserID:       u.ID,
+		CredentialID: []byte("test-credential-id"),
+		PublicKey:    []byte("test-public-key"),
+		FriendlyName: "test passkey",
+	}
+	require.NoError(ts.T(), ts.API.db.Create(passkey))
 
 	var buffer bytes.Buffer
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
@@ -706,6 +958,11 @@ func (ts *AdminTestSuite) TestAdminUserSoftDeletion() {
 	for _, identity := range deletedIdentities {
 		require.Empty(ts.T(), identity.IdentityData)
 	}
+
+	// passkeys (WebAuthn credentials) should be hard-deleted
+	deletedPasskeys, err := models.FindWebAuthnCredentialsByUserID(ts.API.db, deletedUser.ID)
+	require.NoError(ts.T(), err)
+	require.Empty(ts.T(), deletedPasskeys)
 }
 
 func (ts *AdminTestSuite) TestAdminUserCreateWithDisabledLogin() {
@@ -727,7 +984,7 @@ func (ts *AdminTestSuite) TestAdminUserCreateWithDisabledLogin() {
 			},
 			userData: map[string]interface{}{
 				"email":    "test1@example.com",
-				"password": "test1",
+				"password": "test123",
 			},
 			expected: http.StatusOK,
 		},
@@ -743,7 +1000,7 @@ func (ts *AdminTestSuite) TestAdminUserCreateWithDisabledLogin() {
 			},
 			userData: map[string]interface{}{
 				"phone":    "123456789",
-				"password": "test1",
+				"password": "test123",
 			},
 			expected: http.StatusOK,
 		},
@@ -755,7 +1012,7 @@ func (ts *AdminTestSuite) TestAdminUserCreateWithDisabledLogin() {
 			},
 			userData: map[string]interface{}{
 				"email":    "test2@example.com",
-				"password": "test2",
+				"password": "test123",
 			},
 			expected: http.StatusOK,
 		},
@@ -791,6 +1048,14 @@ func (ts *AdminTestSuite) TestAdminUserDeleteFactor() {
 	require.NoError(ts.T(), f.SetSecret("secretkey", ts.Config.Security.DBEncryption.Encrypt, ts.Config.Security.DBEncryption.EncryptionKeyID, ts.Config.Security.DBEncryption.EncryptionKey))
 	require.NoError(ts.T(), ts.API.db.Create(f), "Error saving new test factor")
 
+	// An AAL2 session backed by the factor should be downgraded to AAL1 when the
+	// factor is deleted by an admin (mirrors the self-service unenroll behaviour).
+	s, err := models.NewSession(u.ID, &f.ID)
+	require.NoError(ts.T(), err)
+	require.NoError(ts.T(), ts.API.db.Create(s))
+	require.NoError(ts.T(), models.AddClaimToSession(ts.API.db, s.ID, models.TOTPSignIn))
+	require.NoError(ts.T(), s.UpdateAALAndAssociatedFactor(ts.API.db, models.AAL2, &f.ID))
+
 	// Setup request
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/admin/users/%s/factors/%s/", u.ID, f.ID), nil)
@@ -803,6 +1068,14 @@ func (ts *AdminTestSuite) TestAdminUserDeleteFactor() {
 	_, err = models.FindFactorByFactorID(ts.API.db, f.ID)
 	require.EqualError(ts.T(), err, models.FactorNotFoundError{}.Error())
 
+	// The factor's session must be downgraded and its AMR claim stripped.
+	downgraded, err := models.FindSessionByID(ts.API.db, s.ID, false)
+	require.NoError(ts.T(), err)
+	require.Equal(ts.T(), models.AAL1.String(), downgraded.GetAAL())
+	require.Nil(ts.T(), downgraded.FactorID)
+	aal, _, err := downgraded.CalculateAALAndAMR(u)
+	require.NoError(ts.T(), err)
+	require.Equal(ts.T(), models.AAL1, aal)
 }
 
 // TestAdminUserGetFactor tests API /admin/user/<user_id>/factors/

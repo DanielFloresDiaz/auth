@@ -49,6 +49,7 @@ type VerifyParams struct {
 	Phone          string    `json:"phone"`
 	RedirectTo     string    `json:"redirect_to"`
 	OrganizationID uuid.UUID `json:"organization_id"`
+	ProjectID      uuid.UUID `json:"project_id"`
 }
 
 func (p *VerifyParams) Validate(r *http.Request, a *API) error {
@@ -194,7 +195,7 @@ func (a *API) verifyGet(w http.ResponseWriter, r *http.Request, params *VerifyPa
 		}
 
 		if isImplicitFlow(flowType) {
-			token, terr = a.issueRefreshToken(r, tx, user, models.OTP, grantParams)
+			token, terr = a.issueRefreshToken(r, w.Header(), tx, user, models.OTP, grantParams)
 			if terr != nil {
 				return terr
 			}
@@ -299,7 +300,7 @@ func (a *API) verifyPost(w http.ResponseWriter, r *http.Request, params *VerifyP
 		if terr := tx.Reload(user); terr != nil {
 			return terr
 		}
-		token, terr = a.issueRefreshToken(r, tx, user, models.OTP, grantParams)
+		token, terr = a.issueRefreshToken(r, w.Header(), tx, user, models.OTP, grantParams)
 		if terr != nil {
 			return terr
 		}
@@ -423,7 +424,8 @@ func (a *API) smsVerify(r *http.Request, conn *storage.Connection, user *models.
 	phoneIdentityWasCreated := false
 	err := conn.Transaction(func(tx *storage.Connection) error {
 
-		if params.Type == smsVerification {
+		switch params.Type {
+		case smsVerification:
 			if terr := models.NewAuditLogEntry(config.AuditLog, r, tx, user, models.UserSignedUpAction, "", map[string]interface{}{
 				"provider": PhoneProvider,
 			}); terr != nil {
@@ -432,16 +434,16 @@ func (a *API) smsVerify(r *http.Request, conn *storage.Connection, user *models.
 			if terr := user.ConfirmPhone(tx); terr != nil {
 				return apierrors.NewInternalServerError("Error confirming user").WithInternalError(terr)
 			}
-		} else if params.Type == phoneChangeVerification {
+		case phoneChangeVerification:
 			if terr := models.NewAuditLogEntry(config.AuditLog, r, tx, user, models.UserModifiedAction, "", nil); terr != nil {
 				return terr
 			}
-			if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "phone", user.OrganizationID.UUID, user.ProjectID); terr != nil {
+			if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), PhoneProvider, user.OrganizationID.UUID, user.ProjectID); terr != nil {
 				if !models.IsNotFoundError(terr) {
 					return terr
 				}
 				// confirming the phone change should create a new phone identity if the user doesn't have one
-				if _, terr = a.createNewIdentity(tx, user, "phone", structs.Map(provider.Claims{
+				if _, terr = a.createNewIdentity(tx, user, PhoneProvider, structs.Map(provider.Claims{
 					Subject:       user.ID.String(),
 					Phone:         params.Phone,
 					PhoneVerified: true,
@@ -488,7 +490,7 @@ func (a *API) smsVerify(r *http.Request, conn *storage.Connection, user *models.
 
 	// Send identity linked notification email if a new phone identity was created
 	if phoneIdentityWasCreated && config.Mailer.Notifications.IdentityLinkedEnabled && user.GetEmail() != "" {
-		if err := a.sendIdentityLinkedNotification(r, conn, user, "phone"); err != nil {
+		if err := a.sendIdentityLinkedNotification(r, conn, user, PhoneProvider); err != nil {
 			// Log the error but don't fail the verification
 			logrus.WithError(err).Warn("Unable to send identity linked notification email")
 		}
@@ -524,6 +526,8 @@ func (a *API) prepErrorRedirectURL(err *HTTPError, r *http.Request, rurl string,
 		u.RawQuery = q.Encode()
 	}
 	// Left as hash fragment to comply with spec.
+	// Add Supabase Auth identifier to help clients distinguish Supabase Auth redirects
+	hq.Set("sb", "")
 	u.Fragment = hq.Encode()
 	return u.String(), nil
 }
@@ -540,6 +544,8 @@ func (a *API) prepRedirectURL(message string, rurl string, flowType models.FlowT
 		q.Set("message", message)
 	}
 	u.RawQuery = q.Encode()
+	// Add Supabase Auth identifier to help clients distinguish Supabase Auth redirects
+	hq.Set("sb", "")
 	u.Fragment = hq.Encode()
 	return u.String(), nil
 }
@@ -603,12 +609,12 @@ func (a *API) emailChangeVerify(r *http.Request, conn *storage.Connection, param
 			return terr
 		}
 
-		if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), "email", user.OrganizationID.UUID, user.ProjectID); terr != nil {
+		if identity, terr := models.FindIdentityByIdAndProvider(tx, user.ID.String(), EmailProvider, user.OrganizationID.UUID, user.ProjectID); terr != nil {
 			if !models.IsNotFoundError(terr) {
 				return terr
 			}
 			// confirming the email change should create a new email identity if the user doesn't have one
-			if _, terr = a.createNewIdentity(tx, user, "email", structs.Map(provider.Claims{
+			if _, terr = a.createNewIdentity(tx, user, EmailProvider, structs.Map(provider.Claims{
 				Subject:       user.ID.String(),
 				Email:         user.EmailChange,
 				EmailVerified: true,
@@ -661,13 +667,13 @@ func (a *API) verifyTokenHash(conn *storage.Connection, params *VerifyParams) (*
 	switch params.Type {
 	case mail.EmailOTPVerification:
 		// need to find user by confirmation token or recovery token with the token hash
-		user, err = models.FindUserByConfirmationOrRecoveryToken(conn, params.TokenHash)
+		user, err = models.FindUserByOneTimeToken(conn, params.TokenHash, models.ConfirmationToken, models.RecoveryToken)
 	case mail.SignupVerification, mail.InviteVerification:
-		user, err = models.FindUserByConfirmationToken(conn, params.TokenHash)
+		user, err = models.FindUserByOneTimeToken(conn, params.TokenHash, models.ConfirmationToken)
 	case mail.RecoveryVerification, mail.MagicLinkVerification:
-		user, err = models.FindUserByRecoveryToken(conn, params.TokenHash)
+		user, err = models.FindUserByOneTimeToken(conn, params.TokenHash, models.RecoveryToken)
 	case mail.EmailChangeVerification:
-		user, err = models.FindUserByEmailChangeToken(conn, params.TokenHash)
+		user, err = models.FindUserByOneTimeToken(conn, params.TokenHash, models.EmailChangeTokenCurrent, models.EmailChangeTokenNew)
 	default:
 		return nil, apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Invalid email verification type")
 	}
@@ -712,21 +718,25 @@ func (a *API) verifyTokenHash(conn *storage.Connection, params *VerifyParams) (*
 func (a *API) verifyUserAndToken(conn *storage.Connection, params *VerifyParams, aud string) (*models.User, error) {
 	config := a.config
 
+	if config.Experimental.EnableOTTAsSourceOfTruth {
+		return a.verifyUserAndTokenFromOTT(conn, params, aud)
+	}
+
 	var user *models.User
 	var err error
 	tokenHash := params.TokenHash
 
 	switch params.Type {
 	case phoneChangeVerification:
-		user, err = models.FindUserByPhoneChangeAndAudience(conn, params.Phone, aud, params.OrganizationID, uuid.Nil)
+		user, err = models.FindUserByPhoneChangeAndAudience(conn, params.Phone, aud, params.OrganizationID, params.ProjectID)
 	case smsVerification:
-		user, err = models.FindUserByPhoneAndAudience(conn, params.Phone, aud, params.OrganizationID, uuid.Nil)
+		user, err = models.FindUserByPhoneAndAudience(conn, params.Phone, aud, params.OrganizationID, params.ProjectID)
 	case mail.EmailChangeVerification:
 		// Since the email change could be trigger via the implicit or PKCE flow,
 		// the query used has to also check if the token saved in the db contains the pkce_ prefix
 		user, err = models.FindUserForEmailChange(conn, params.Email, tokenHash, aud, config.Mailer.SecureEmailChangeEnabled)
 	default:
-		user, err = models.FindUserByEmailAndAudience(conn, params.Email, aud, params.OrganizationID, uuid.Nil)
+		user, err = models.FindUserByEmailAndAudience(conn, params.Email, aud, params.OrganizationID, params.ProjectID)
 	}
 
 	if err != nil {

@@ -69,7 +69,7 @@ func adminCreateUser(config *conf.GlobalConfiguration, args []string) {
 	organization_id := uuid.Must(uuid.FromString(args[2]))
 	project_id := uuid.Must(uuid.FromString(args[3]))
 
-	if user, err := models.IsDuplicatedEmail(db, args[0], aud, nil, config.Experimental.ProvidersWithOwnLinkingDomain, organization_id, project_id); user != nil {
+	if user, err := models.IsDuplicatedEmail(db, args[0], aud, nil, config.Experimental.ProviderLinkingDomains, organization_id, project_id); user != nil {
 		logrus.Fatalf("Error creating new user: user already exists")
 	} else if err != nil {
 		logrus.Fatalf("Error checking user email: %+v", err)

@@ -20,7 +20,7 @@ func (a *API) AcceptInvite(w http.ResponseWriter, r *http.Request) error {
 		return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "invite_token is required")
 	}
 
-	user, err := models.FindUserByConfirmationToken(db, inviteToken)
+	user, err := models.FindUserByOneTimeToken(db, inviteToken, models.ConfirmationToken)
 	if err != nil {
 		if models.IsNotFoundError(err) {
 			return apierrors.NewNotFoundError(apierrors.ErrorCodeInviteNotFound, "Invite not found")
@@ -39,7 +39,8 @@ func (a *API) AcceptInvite(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if len(providers) == 1 {
-		http.Redirect(w, r, providers[0].URL, http.StatusFound)
+		// URL is this server's /authorize endpoint from the configured external host.
+		http.Redirect(w, r, providers[0].URL, http.StatusFound) // #nosec G710 -- authorize URL built from external host, not a caller-supplied redirect
 		return nil
 	}
 
@@ -60,8 +61,9 @@ func (a *API) AcceptInvite(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
-	_, err = w.Write([]byte(html))
+	_, err = w.Write([]byte(html)) // #nosec G705 -- html/template escapes user fields; icons are static markup
 	return err
 }
 

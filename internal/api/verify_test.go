@@ -328,7 +328,7 @@ func (ts *VerifyTestSuite) TestOAuthInviteVerifyDoesNotConfirm() {
 	u.ConfirmationSentAt = &sentAt
 	u.EmailConfirmedAt = nil
 	require.NoError(ts.T(), ts.API.db.Update(u))
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.ConfirmationToken, models.ConfirmationToken))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.ConfirmationToken, models.ConfirmationToken, ts.Config.Mailer.OtpExpAsDuration(), true))
 
 	getReq := httptest.NewRequest(http.MethodGet, "http://localhost/verify?type=invite&token="+u.ConfirmationToken, nil)
 	getRec := httptest.NewRecorder()
@@ -376,7 +376,8 @@ func (ts *VerifyTestSuite) TestExpiredConfirmationToken() {
 	sentTime := time.Now().Add(-48 * time.Hour)
 	u.ConfirmationSentAt = &sentTime
 	require.NoError(ts.T(), ts.API.db.Update(u))
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.ConfirmationToken, models.ConfirmationToken))
+	// negative duration so expires_at agrees with the already-expired ConfirmationSentAt
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.ConfirmationToken, models.ConfirmationToken, -24*time.Hour, true))
 
 	// Setup request
 	reqURL := fmt.Sprintf("http://localhost/verify?type=%s&token=%s", mail.SignupVerification, u.ConfirmationToken)
@@ -412,10 +413,10 @@ func (ts *VerifyTestSuite) TestInvalidOtp() {
 	u.EmailChangeTokenNew = "123456"
 	u.EmailChangeTokenCurrent = "123456"
 	require.NoError(ts.T(), ts.API.db.Update(u))
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.ConfirmationToken, models.ConfirmationToken))
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.PhoneChange, u.PhoneChangeToken, models.PhoneChangeToken))
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.EmailChangeTokenCurrent, models.EmailChangeTokenCurrent))
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.EmailChange, u.EmailChangeTokenNew, models.EmailChangeTokenNew))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.ConfirmationToken, models.ConfirmationToken, ts.Config.Mailer.OtpExpAsDuration(), true))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.PhoneChange, u.PhoneChangeToken, models.PhoneChangeToken, ts.Config.Sms.OtpExpAsDuration(), true))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.EmailChangeTokenCurrent, models.EmailChangeTokenCurrent, ts.Config.Mailer.OtpExpAsDuration(), true))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.EmailChange, u.EmailChangeTokenNew, models.EmailChangeTokenNew, ts.Config.Mailer.OtpExpAsDuration(), true))
 
 	type ResponseBody struct {
 		Code int    `json:"code"`
@@ -781,7 +782,7 @@ func (ts *VerifyTestSuite) TestVerifySignupWithRedirectURLContainedPath() {
 			sendTime := time.Now().Add(time.Hour)
 			u.ConfirmationSentAt = &sendTime
 			require.NoError(ts.T(), ts.API.db.Update(u))
-			require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.ConfirmationToken, models.ConfirmationToken))
+			require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.ConfirmationToken, models.ConfirmationToken, ts.Config.Mailer.OtpExpAsDuration(), true))
 
 			reqURL := fmt.Sprintf("http://localhost/verify?type=%s&token=%s&redirect_to=%s", "signup", u.ConfirmationToken, redirectURL)
 			req := httptest.NewRequest(http.MethodGet, reqURL, nil)
@@ -838,15 +839,25 @@ func (ts *VerifyTestSuite) TestVerifyPKCEOTP() {
 			var buffer bytes.Buffer
 			// since the test user is the same, the tokens are being cleared after each successful verification attempt
 			// so we create them on each run
-			if c.payload.Type == "signup" {
-				require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), c.payload.Token, models.ConfirmationToken))
-			} else if c.payload.Type == "magiclink" {
-				require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), c.payload.Token, models.RecoveryToken))
+			switch c.payload.Type {
+			case "signup":
+				require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), c.payload.Token, models.ConfirmationToken, ts.Config.Mailer.OtpExpAsDuration(), true))
+			case "magiclink":
+				require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), c.payload.Token, models.RecoveryToken, ts.Config.Mailer.OtpExpAsDuration(), true))
 			}
 
 			require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(c.payload))
 			codeChallenge := "codechallengecodechallengcodechallengcodechallengcodechallenge"
-			flowState := models.NewFlowState(c.authenticationMethod.String(), codeChallenge, models.SHA256, c.authenticationMethod, &u.ID, ts.OrganizationID, ts.ProjectID)
+			flowState, err := models.NewFlowState(models.FlowStateParams{
+				ProviderType:         c.authenticationMethod.String(),
+				AuthenticationMethod: c.authenticationMethod,
+				CodeChallenge:        codeChallenge,
+				CodeChallengeMethod:  "s256",
+				UserID:               &u.ID,
+				OrganizationID:       uuid.NullUUID{UUID: ts.OrganizationID, Valid: ts.OrganizationID != uuid.Nil},
+				ProjectID:            ts.ProjectID,
+			})
+			require.NoError(ts.T(), err)
 			require.NoError(ts.T(), ts.API.db.Create(flowState))
 
 			requestUrl := fmt.Sprintf("http://localhost/verify?type=%v&token=%v", c.payload.Type, c.payload.Token)
@@ -886,10 +897,10 @@ func (ts *VerifyTestSuite) TestVerifyBannedUser() {
 	t = time.Now().Add(24 * time.Hour)
 	u.BannedUntil = &t
 	require.NoError(ts.T(), ts.API.db.Update(u))
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.ConfirmationToken, models.ConfirmationToken))
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.RecoveryToken, models.RecoveryToken))
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.EmailChangeTokenCurrent, models.EmailChangeTokenCurrent))
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.EmailChangeTokenNew, models.EmailChangeTokenNew))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.ConfirmationToken, models.ConfirmationToken, ts.Config.Mailer.OtpExpAsDuration(), true))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.RecoveryToken, models.RecoveryToken, ts.Config.Mailer.OtpExpAsDuration(), true))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.EmailChangeTokenCurrent, models.EmailChangeTokenCurrent, ts.Config.Mailer.OtpExpAsDuration(), true))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, u.GetEmail(), u.EmailChangeTokenNew, models.EmailChangeTokenNew, ts.Config.Mailer.OtpExpAsDuration(), true))
 
 	cases := []struct {
 		desc    string
@@ -1126,15 +1137,15 @@ func (ts *VerifyTestSuite) TestVerifyValidOtp() {
 			u.EmailChangeSentAt = &c.sentTime
 			u.PhoneChangeSentAt = &c.sentTime
 
-			u.ConfirmationToken = c.expected.tokenHash
-			u.RecoveryToken = c.expected.tokenHash
-			u.EmailChangeTokenNew = c.expected.tokenHash
-			u.PhoneChangeToken = c.expected.tokenHash
+			u.ConfirmationToken = c.tokenHash
+			u.RecoveryToken = c.tokenHash
+			u.EmailChangeTokenNew = c.tokenHash
+			u.PhoneChangeToken = c.tokenHash
 
-			require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", u.ConfirmationToken, models.ConfirmationToken))
-			require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", u.RecoveryToken, models.RecoveryToken))
-			require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", u.EmailChangeTokenNew, models.EmailChangeTokenNew))
-			require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", u.PhoneChangeToken, models.PhoneChangeToken))
+			require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", u.ConfirmationToken, models.ConfirmationToken, ts.Config.Mailer.OtpExpAsDuration(), true))
+			require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", u.RecoveryToken, models.RecoveryToken, ts.Config.Mailer.OtpExpAsDuration(), true))
+			require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", u.EmailChangeTokenNew, models.EmailChangeTokenNew, ts.Config.Mailer.OtpExpAsDuration(), true))
+			require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", u.PhoneChangeToken, models.PhoneChangeToken, ts.Config.Sms.OtpExpAsDuration(), true))
 
 			require.NoError(ts.T(), ts.API.db.Update(u))
 
@@ -1148,7 +1159,7 @@ func (ts *VerifyTestSuite) TestVerifyValidOtp() {
 			// Setup response recorder
 			w := httptest.NewRecorder()
 			ts.API.handler.ServeHTTP(w, req)
-			assert.Equal(ts.T(), c.expected.code, w.Code)
+			assert.Equal(ts.T(), c.code, w.Code)
 		})
 	}
 }
@@ -1207,8 +1218,8 @@ func (ts *VerifyTestSuite) TestSecureEmailChangeWithTokenHash() {
 			u.EmailChangeTokenNew = newEmailChangeToken
 			require.NoError(ts.T(), models.ClearAllOneTimeTokensForUser(ts.API.db, u.ID))
 
-			require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", currentEmailChangeToken, models.EmailChangeTokenCurrent))
-			require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", newEmailChangeToken, models.EmailChangeTokenNew))
+			require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", currentEmailChangeToken, models.EmailChangeTokenCurrent, ts.Config.Mailer.OtpExpAsDuration(), true))
+			require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", newEmailChangeToken, models.EmailChangeTokenNew, ts.Config.Mailer.OtpExpAsDuration(), true))
 
 			currentTime := time.Now()
 			u.EmailChangeSentAt = &currentTime
@@ -1252,28 +1263,28 @@ func (ts *VerifyTestSuite) TestPrepRedirectURL() {
 			message:  singleConfirmationAccepted,
 			rurl:     "https://example.com/?first=another&second=other",
 			flowType: models.PKCEFlow,
-			expected: fmt.Sprintf("https://example.com/?first=another&message=%s&second=other#message=%s", escapedMessage, escapedMessage),
+			expected: fmt.Sprintf("https://example.com/?first=another&message=%s&second=other#message=%s&sb=", escapedMessage, escapedMessage),
 		},
 		{
 			desc:     "(PKCE): Query params in redirect url are overriden",
 			message:  singleConfirmationAccepted,
 			rurl:     "https://example.com/?message=Valid+redirect+URL",
 			flowType: models.PKCEFlow,
-			expected: fmt.Sprintf("https://example.com/?message=%s#message=%s", escapedMessage, escapedMessage),
+			expected: fmt.Sprintf("https://example.com/?message=%s#message=%s&sb=", escapedMessage, escapedMessage),
 		},
 		{
 			desc:     "(Implicit): plain redirect url",
 			message:  singleConfirmationAccepted,
 			rurl:     "https://example.com/",
 			flowType: models.ImplicitFlow,
-			expected: fmt.Sprintf("https://example.com/#message=%s", escapedMessage),
+			expected: fmt.Sprintf("https://example.com/#message=%s&sb=", escapedMessage),
 		},
 		{
 			desc:     "(Implicit): query params retained",
 			message:  singleConfirmationAccepted,
 			rurl:     "https://example.com/?first=another",
 			flowType: models.ImplicitFlow,
-			expected: fmt.Sprintf("https://example.com/?first=another#message=%s", escapedMessage),
+			expected: fmt.Sprintf("https://example.com/?first=another#message=%s&sb=", escapedMessage),
 		},
 	}
 	for _, c := range cases {
@@ -1301,28 +1312,28 @@ func (ts *VerifyTestSuite) TestPrepErrorRedirectURL() {
 			message:  "Valid redirect URL",
 			rurl:     "https://example.com/",
 			flowType: models.PKCEFlow,
-			expected: fmt.Sprintf("https://example.com/?%s#%s", redirectError, redirectError),
+			expected: fmt.Sprintf("https://example.com/?%s#%s&sb=", redirectError, redirectError),
 		},
 		{
 			desc:     "(PKCE): Error with conflicting query params in redirect url",
 			message:  DefaultError,
 			rurl:     "https://example.com/?error=Error+to+be+overriden",
 			flowType: models.PKCEFlow,
-			expected: fmt.Sprintf("https://example.com/?%s#%s", redirectError, redirectError),
+			expected: fmt.Sprintf("https://example.com/?%s#%s&sb=", redirectError, redirectError),
 		},
 		{
 			desc:     "(Implicit): plain redirect url",
 			message:  DefaultError,
 			rurl:     "https://example.com/",
 			flowType: models.ImplicitFlow,
-			expected: fmt.Sprintf("https://example.com/#%s", redirectError),
+			expected: fmt.Sprintf("https://example.com/#%s&sb=", redirectError),
 		},
 		{
 			desc:     "(Implicit): query params preserved",
 			message:  DefaultError,
 			rurl:     "https://example.com/?test=param",
 			flowType: models.ImplicitFlow,
-			expected: fmt.Sprintf("https://example.com/?test=param#%s", redirectError),
+			expected: fmt.Sprintf("https://example.com/?test=param#%s&sb=", redirectError),
 		},
 	}
 	for _, c := range cases {
@@ -1573,7 +1584,7 @@ func (ts *VerifyTestSuite) TestVerifyPhoneChangeSendsNotificationEmailEnabled() 
 	u.PhoneChangeSentAt = &sentTime
 	u.PhoneChangeToken = expectedTokenHash
 
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", u.PhoneChangeToken, models.PhoneChangeToken))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", u.PhoneChangeToken, models.PhoneChangeToken, ts.Config.Sms.OtpExpAsDuration(), true))
 	require.NoError(ts.T(), ts.API.db.Update(u))
 
 	var buffer bytes.Buffer
@@ -1624,7 +1635,7 @@ func (ts *VerifyTestSuite) TestVerifyPhoneChangeSendsNotificationEmailEnabled_No
 	u.PhoneChangeSentAt = &sentTime
 	u.PhoneChangeToken = expectedTokenHash
 
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", u.PhoneChangeToken, models.PhoneChangeToken))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", u.PhoneChangeToken, models.PhoneChangeToken, ts.Config.Sms.OtpExpAsDuration(), true))
 	require.NoError(ts.T(), ts.API.db.Update(u))
 
 	var buffer bytes.Buffer
@@ -1672,7 +1683,7 @@ func (ts *VerifyTestSuite) TestVerifyPhoneChangeSendsNotificationEmailDisabled()
 	u.PhoneChangeSentAt = &sentTime
 	u.PhoneChangeToken = expectedTokenHash
 
-	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", u.PhoneChangeToken, models.PhoneChangeToken))
+	require.NoError(ts.T(), models.CreateOneTimeToken(ts.API.db, u.ID, "relates_to not used", u.PhoneChangeToken, models.PhoneChangeToken, ts.Config.Sms.OtpExpAsDuration(), true))
 	require.NoError(ts.T(), ts.API.db.Update(u))
 
 	var buffer bytes.Buffer

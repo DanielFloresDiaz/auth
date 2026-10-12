@@ -48,7 +48,7 @@ func (a *API) validateSignupParams(ctx context.Context, p *SignupParams) error {
 	if p.Email != "" && p.Phone != "" {
 		return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Only an email address or phone number should be provided on signup.")
 	}
-	if p.Provider == "phone" && !sms_provider.IsValidMessageChannel(p.Channel, config) {
+	if p.Provider == PhoneProvider && !sms_provider.IsValidMessageChannel(p.Channel, config) {
 		return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, InvalidChannelError)
 	}
 	// PKCE not needed as phone signups already return access token in body
@@ -64,9 +64,9 @@ func (a *API) validateSignupParams(ctx context.Context, p *SignupParams) error {
 
 func (p *SignupParams) ConfigureDefaults() {
 	if p.Email != "" {
-		p.Provider = "email"
+		p.Provider = EmailProvider
 	} else if p.Phone != "" {
-		p.Provider = "phone"
+		p.Provider = PhoneProvider
 	}
 	if p.Data == nil {
 		p.Data = make(map[string]interface{})
@@ -80,11 +80,11 @@ func (p *SignupParams) ConfigureDefaults() {
 
 func (params *SignupParams) ToUserModel(isSSOUser bool) (user *models.User, err error) {
 	switch params.Provider {
-	case "email":
+	case EmailProvider:
 		user, err = models.NewUser("", params.Email, params.Password, params.Aud, params.Data, params.OrganizationID, params.ProjectID)
-	case "phone":
+	case PhoneProvider:
 		user, err = models.NewUser(params.Phone, "", params.Password, params.Aud, params.Data, params.OrganizationID, params.ProjectID)
-	case "anonymous":
+	case AnonymousProvider:
 		user, err = models.NewUser("", "", "", params.Aud, params.Data, params.OrganizationID, params.ProjectID)
 		user.IsAnonymous = true
 	default:
@@ -103,7 +103,7 @@ func (params *SignupParams) ToUserModel(isSSOUser bool) (user *models.User, err 
 	user.Identities = make([]models.Identity, 0)
 	user.ProjectID = params.ProjectID
 
-	if params.Provider != "anonymous" {
+	if params.Provider != AnonymousProvider {
 		// TODO: Deprecate "provider" field
 		user.AppMetaData["provider"] = params.Provider
 
@@ -145,7 +145,7 @@ func (a *API) Signup(w http.ResponseWriter, r *http.Request) error {
 	params.Aud = a.requestAud(ctx, r)
 
 	switch params.Provider {
-	case "email":
+	case EmailProvider:
 		if !config.External.Email.Enabled {
 			return apierrors.NewBadRequestError(apierrors.ErrorCodeEmailProviderDisabled, "Email signups are disabled")
 		}
@@ -153,8 +153,8 @@ func (a *API) Signup(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
-		user, err = models.IsDuplicatedEmail(db, params.Email, params.Aud, nil, config.Experimental.ProvidersWithOwnLinkingDomain, params.OrganizationID, params.ProjectID)
-	case "phone":
+		user, err = models.IsDuplicatedEmail(db, params.Email, params.Aud, nil, config.Experimental.ProviderLinkingDomains, params.OrganizationID, params.ProjectID)
+	case PhoneProvider:
 		if !config.External.Phone.Enabled {
 			return apierrors.NewBadRequestError(apierrors.ErrorCodePhoneProviderDisabled, "Phone signups are disabled")
 		}
@@ -200,7 +200,7 @@ func (a *API) Signup(w http.ResponseWriter, r *http.Request) error {
 		var excludeColumns []string
 
 		if user != nil {
-			if (params.Provider == "email" && user.IsConfirmed()) || (params.Provider == "phone" && user.IsPhoneConfirmed()) {
+			if (params.Provider == EmailProvider && user.IsConfirmed()) || (params.Provider == PhoneProvider && user.IsPhoneConfirmed()) {
 				return UserExistsError
 			}
 			// do not update the user because we can't be sure of their claimed identity
@@ -240,7 +240,7 @@ func (a *API) Signup(w http.ResponseWriter, r *http.Request) error {
 		}
 		user.Identities = []models.Identity{*identity}
 
-		if params.Provider == "email" && !user.IsConfirmed() {
+		if params.Provider == EmailProvider && !user.IsConfirmed() {
 			if config.Mailer.Autoconfirm {
 				if terr = models.NewAuditLogEntry(config.AuditLog, r, tx, user, models.UserSignedUpAction, "", map[string]interface{}{
 					"provider": params.Provider,
@@ -268,7 +268,7 @@ func (a *API) Signup(w http.ResponseWriter, r *http.Request) error {
 					return terr
 				}
 			}
-		} else if params.Provider == "phone" && !user.IsPhoneConfirmed() {
+		} else if params.Provider == PhoneProvider && !user.IsPhoneConfirmed() {
 			if config.Sms.Autoconfirm {
 				if terr = models.NewAuditLogEntry(config.AuditLog, r, tx, user, models.UserSignedUpAction, "", map[string]interface{}{
 					"provider": params.Provider,
@@ -329,7 +329,7 @@ func (a *API) Signup(w http.ResponseWriter, r *http.Request) error {
 			}); terr != nil {
 				return terr
 			}
-			token, terr = a.issueRefreshToken(r, tx, user, models.PasswordGrant, grantParams)
+			token, terr = a.issueRefreshToken(r, w.Header(), tx, user, models.PasswordGrant, grantParams)
 
 			if terr != nil {
 				return terr
@@ -385,9 +385,9 @@ func sanitizeUser(u *models.User, params *SignupParams) (*models.User, error) {
 
 	// sanitize param fields
 	switch params.Provider {
-	case "email":
+	case EmailProvider:
 		u.Phone = ""
-	case "phone":
+	case PhoneProvider:
 		u.Email = ""
 	default:
 		u.Phone, u.Email = "", ""

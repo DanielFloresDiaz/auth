@@ -87,26 +87,32 @@ func (a *API) SingleSignOn(w http.ResponseWriter, r *http.Request) error {
 	if err := validatePKCEParams(codeChallengeMethod, codeChallenge); err != nil {
 		return err
 	}
-	flowType := getFlowFromChallenge(params.CodeChallenge)
-	var flowStateID *uuid.UUID
-	flowStateID = nil
-	if isPKCEFlow(flowType) {
 
-		organization_id := params.OrganizationID
-		project_id := params.ProjectID
-		flowState, err := generateFlowState(db, models.SSOSAML.String(), models.SSOSAML, codeChallengeMethod, codeChallenge, nil, organization_id, project_id)
-		if err != nil {
-			return err
-		}
-		flowStateID = &flowState.ID
+	// Always create flow state for all SSO flows
+	flowParams := models.FlowStateParams{
+		ProviderType:         models.SSOSAML.String(),
+		AuthenticationMethod: models.SSOSAML,
+		CodeChallenge:        codeChallenge,
+		CodeChallengeMethod:  codeChallengeMethod,
+		Referrer:             params.RedirectTo,
+		OrganizationID:       uuid.NullUUID{UUID: params.OrganizationID, Valid: params.OrganizationID != uuid.Nil},
+		ProjectID:            params.ProjectID,
 	}
+	flowState, err := models.NewFlowState(flowParams)
+	if err != nil {
+		return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Invalid code_challenge_method").WithInternalError(err)
+	}
+	if err := db.Create(flowState); err != nil {
+		return apierrors.NewInternalServerError("Error creating flow state").WithInternalError(err)
+	}
+	flowStateID := &flowState.ID
 
 	entityDescriptor, err := ssoProvider.SAMLProvider.EntityDescriptor()
 	if err != nil {
 		return apierrors.NewInternalServerError("Error parsing SAML Metadata for SAML provider").WithInternalError(err)
 	}
 
-	serviceProvider := a.getSAMLServiceProvider(entityDescriptor, false /* <- idpInitiated */)
+	serviceProvider := a.newSAMLServiceProvider(entityDescriptor, false /* <- idpInitiated */, a.config.SAML.RSAPrivateKey, a.config.SAML.Certificate)
 
 	authnRequest, err := serviceProvider.MakeAuthenticationRequest(
 		serviceProvider.GetSSOBindingLocation(saml.HTTPRedirectBinding),

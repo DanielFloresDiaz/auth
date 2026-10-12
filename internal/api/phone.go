@@ -95,15 +95,16 @@ func (a *API) sendPhoneConfirmation(r *http.Request, tx *storage.Connection, use
 		otp = crypto.GenerateOtp(config.Sms.OtpLength)
 
 		if config.Hook.SendSMS.Enabled {
-			input := v0hooks.SendSMSInput{
-				User: user,
-				SMS: v0hooks.SMS{
+			input := v0hooks.NewSendSMSInput(
+				r,
+				user,
+				v0hooks.SMS{
 					OTP:   otp,
 					Phone: phone,
 				},
-			}
+			)
 			output := v0hooks.SendSMSOutput{}
-			err := a.hooksMgr.InvokeHook(tx, r, &input, &output)
+			err := a.hooksMgr.InvokeHook(tx, r, input, &output)
 			if err != nil {
 				return "", err
 			}
@@ -141,15 +142,15 @@ func (a *API) sendPhoneConfirmation(r *http.Request, tx *storage.Connection, use
 	var ottErr error
 	switch otpType {
 	case phoneConfirmationOtp:
-		if err := models.CreateOneTimeToken(tx, user.ID, user.GetPhone(), user.ConfirmationToken, models.ConfirmationToken); err != nil {
+		if err := models.CreateOneTimeToken(tx, user.ID, user.GetPhone(), user.ConfirmationToken, models.ConfirmationToken, config.Sms.OtpExpAsDuration(), config.Experimental.OneTimeTokenExpiresAtWriteEnabled); err != nil {
 			ottErr = errors.Wrap(err, "Database error creating confirmation token for phone")
 		}
 	case phoneChangeVerification:
-		if err := models.CreateOneTimeToken(tx, user.ID, user.PhoneChange, user.PhoneChangeToken, models.PhoneChangeToken); err != nil {
+		if err := models.CreateOneTimeToken(tx, user.ID, user.PhoneChange, user.PhoneChangeToken, models.PhoneChangeToken, config.Sms.OtpExpAsDuration(), config.Experimental.OneTimeTokenExpiresAtWriteEnabled); err != nil {
 			ottErr = errors.Wrap(err, "Database error creating phone change token")
 		}
 	case phoneReauthenticationOtp:
-		if err := models.CreateOneTimeToken(tx, user.ID, user.GetPhone(), user.ReauthenticationToken, models.ReauthenticationToken); err != nil {
+		if err := models.CreateOneTimeToken(tx, user.ID, user.GetPhone(), user.ReauthenticationToken, models.ReauthenticationToken, config.Sms.OtpExpAsDuration(), config.Experimental.OneTimeTokenExpiresAtWriteEnabled); err != nil {
 			ottErr = errors.Wrap(err, "Database error creating reauthentication token for phone")
 		}
 	}

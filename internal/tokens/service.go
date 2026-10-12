@@ -2,7 +2,9 @@ package tokens
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	mathRand "math/rand"
 	"net/http"
 	"net/url"
@@ -26,6 +28,53 @@ import (
 
 const retryLoopDuration = 5.0
 
+// OAuth2 server grant type values
+const (
+	GrantTypeAuthorizationCode = "authorization_code"
+	GrantTypeRefreshToken      = "refresh_token"
+)
+
+// AMRClaim supports unmarshalling AMR as either strings or AMREntry objects.
+type AMRClaim []models.AMREntry
+
+// UnmarshalJSON accepts either an array of strings or AMREntry objects.
+func (a *AMRClaim) UnmarshalJSON(data []byte) error {
+	// Handle null explicitly - null cannot be unmarshaled into a slice
+	if len(data) > 0 {
+		trimmed := strings.TrimSpace(string(data))
+		if trimmed == "null" {
+			*a = AMRClaim{}
+			return nil
+		}
+	}
+
+	var rawItems []json.RawMessage
+	if err := json.Unmarshal(data, &rawItems); err != nil {
+		return err
+	}
+
+	entries := make([]models.AMREntry, 0, len(rawItems))
+	for _, item := range rawItems {
+		var method string
+		if err := json.Unmarshal(item, &method); err == nil {
+			entries = append(entries, models.AMREntry{
+				Method:    method,
+				Timestamp: time.Now().Unix(),
+			})
+			continue
+		}
+
+		var entry models.AMREntry
+		if err := json.Unmarshal(item, &entry); err != nil {
+			return err
+		}
+		entries = append(entries, entry)
+	}
+
+	*a = entries
+	return nil
+}
+
 // AccessTokenClaims is a struct thats used for JWT claims
 type AccessTokenClaims struct {
 	jwt.RegisteredClaims
@@ -35,7 +84,7 @@ type AccessTokenClaims struct {
 	UserMetaData                  map[string]interface{} `json:"user_metadata"`
 	Role                          string                 `json:"role"`
 	AuthenticatorAssuranceLevel   string                 `json:"aal,omitempty"`
-	AuthenticationMethodReference []models.AMREntry      `json:"amr,omitempty"`
+	AuthenticationMethodReference AMRClaim               `json:"amr,omitempty"`
 	SessionId                     string                 `json:"session_id,omitempty"`
 	IsAnonymous                   bool                   `json:"is_anonymous"`
 	ClientID                      string                 `json:"client_id,omitempty"`
@@ -105,6 +154,8 @@ func (r *AccessTokenResponse) AsRedirectURL(redirectURL string, extraParams url.
 	extraParams.Set("expires_in", strconv.Itoa(r.ExpiresIn))
 	extraParams.Set("expires_at", strconv.FormatInt(r.ExpiresAt, 10))
 	extraParams.Set("refresh_token", r.RefreshToken)
+	// Add Supabase Auth identifier to help clients distinguish Supabase Auth redirects
+	extraParams.Set("sb", "")
 
 	return redirectURL + "#" + extraParams.Encode()
 }
@@ -371,6 +422,55 @@ func (s *Service) RefreshTokenGrant(ctx context.Context, db *storage.Connection,
 					}
 
 					issuedToken = newToken.Token
+
+					shouldUpgrade := config.Security.RefreshTokenAlgorithmVersion == 2 && config.Security.RefreshTokenUpgradePercentage > 0
+
+					if shouldUpgrade && config.Security.RefreshTokenUpgradePercentage < 100 {
+						// convert the session ID to a number in the range [0, 100) and check whether it should be upgraded
+						// we don't want a % of refresh token requests, but a % of sessions here!
+
+						sessionRand := mathRand.New(mathRand.NewSource(int64(crc32.ChecksumIEEE(session.ID.Bytes())))) // #nosec
+						shouldUpgrade = sessionRand.Intn(100) < config.Security.RefreshTokenUpgradePercentage          // #nosec
+					}
+
+					if shouldUpgrade {
+						// got v1 refresh token that should be upgraded to v2
+						// so discard the previously generated v1 token, revoke it and issue a v2 token instead
+
+						if session.RefreshTokenHmacKey == nil || session.RefreshTokenCounter == nil {
+							if serr := session.SetupRefreshTokenData(config.Security.DBEncryption); serr != nil {
+								return apierrors.NewInternalServerError("failed to set up refresh token data for session").WithInternalError(serr)
+							}
+						} else if session.RefreshTokenCounter != nil {
+							// session already set up, increment the counter by 1
+							counter := *session.RefreshTokenCounter + 1
+							session.RefreshTokenCounter = &counter
+						}
+
+						signingKey, _, kerr := session.GetRefreshTokenHmacKey(config.Security.DBEncryption)
+						if kerr != nil {
+							return apierrors.NewInternalServerError("failed to load session signing key from database").WithInternalError(kerr)
+						}
+
+						issuedToken = (&crypto.RefreshToken{
+							Version:   0,
+							SessionID: session.ID,
+							Counter:   *session.RefreshTokenCounter,
+						}).Encode(signingKey)
+
+						if terr := session.UpdateRefreshTokenCounterAndHmacKey(tx); terr != nil {
+							return apierrors.NewInternalServerError("failed to set up session with refresh token algorithm v2").WithInternalError(terr)
+						}
+
+						newToken.Revoked = true
+						if terr := tx.UpdateOnly(newToken, "revoked"); terr != nil {
+							return apierrors.NewInternalServerError("failed to mark v1 refresh token as revoked").WithInternalError(terr)
+						}
+
+						responseHeaders.Set("sb-auth-refresh-token-counter", strconv.FormatInt(*session.RefreshTokenCounter, 10))
+					}
+
+					responseHeaders.Set("sb-auth-refresh-token-reuse", "false")
 				}
 
 				responseHeaders.Set("sb-auth-refresh-token-prefix", issuedToken[0:5])
@@ -535,7 +635,7 @@ func (s *Service) RefreshTokenGrant(ctx context.Context, db *storage.Connection,
 			newTokenResponse = &AccessTokenResponse{
 				Token:        tokenString,
 				TokenType:    "bearer",
-				ExpiresIn:    config.JWT.Exp,
+				ExpiresIn:    int(expiresAt - s.now().Unix()),
 				ExpiresAt:    expiresAt,
 				RefreshToken: issuedToken,
 				User:         user,
@@ -555,6 +655,14 @@ func (s *Service) RefreshTokenGrant(ctx context.Context, db *storage.Connection,
 			}
 		}
 		metering.RecordLogin(metering.LoginTypeToken, user.ID, nil)
+		if sessionClientID != nil {
+			metering.RecordLogin(metering.LoginTypeOAuthServer, user.ID, &metering.LoginData{
+				OAuthServer: &metering.OAuthServerData{
+					ClientID:  sessionClientID.String(),
+					GrantType: GrantTypeRefreshToken,
+				},
+			})
+		}
 		return newTokenResponse, nil
 	}
 
@@ -563,6 +671,8 @@ func (s *Service) RefreshTokenGrant(ctx context.Context, db *storage.Connection,
 
 // GenerateAccessToken generates an access token using shared logic
 func (s *Service) GenerateAccessToken(r *http.Request, tx *storage.Connection, params GenerateAccessTokenParams) (string, int64, error) {
+	ctx := r.Context()
+
 	config := s.config
 	if params.SessionID == nil {
 		return "", 0, apierrors.NewInternalServerError("Session is required to issue access token")
@@ -595,6 +705,18 @@ func (s *Service) GenerateAccessToken(r *http.Request, tx *storage.Connection, p
 
 	issuedAt := s.now().UTC()
 	expiresAt := issuedAt.Add(time.Second * time.Duration(config.JWT.Exp))
+
+	if config.Sessions.AllowLowAAL != nil && *config.Sessions.AllowLowAAL != 0 && models.CompareAAL(aal, params.User.HighestPossibleAAL()) < 0 {
+		// if user has mfa enabled and the session has not yet been upgraded
+		// and Limit duration of AAL1 sessions is enabled
+		// expiresAt should be set to the maximum duration for low aal sessions
+		// don't allow sessions.AllowLowAAL to exceed config.JWT.Exp
+		lowAALExp := session.CreatedAt.UTC().Add(*config.Sessions.AllowLowAAL)
+		if lowAALExp.Before(expiresAt) {
+			expiresAt = lowAALExp
+		}
+	}
+
 	var clientID string
 	if params.ClientID != nil && *params.ClientID != uuid.Nil {
 		clientID = params.ClientID.String()
@@ -636,11 +758,12 @@ func (s *Service) GenerateAccessToken(r *http.Request, tx *storage.Connection, p
 
 	var gotrueClaims jwt.Claims = claims
 	if config.Hook.CustomAccessToken.Enabled {
-		input := &v0hooks.CustomAccessTokenInput{
-			UserID:               params.User.ID,
-			Claims:               claims,
-			AuthenticationMethod: params.AuthenticationMethod.String(),
-		}
+		input := v0hooks.NewCustomAccessTokenInput(
+			r,
+			params.User.ID,
+			claims,
+			params.AuthenticationMethod.String(),
+		)
 
 		output := &v0hooks.CustomAccessTokenOutput{}
 
@@ -654,7 +777,7 @@ func (s *Service) GenerateAccessToken(r *http.Request, tx *storage.Connection, p
 		gotrueClaims = jwt.MapClaims(output.Claims)
 	}
 
-	signed, err := SignJWT(&config.JWT, gotrueClaims)
+	signed, err := SignJWT(ctx, &config.JWT, gotrueClaims)
 	if err != nil {
 		return "", 0, err
 	}
@@ -669,7 +792,7 @@ func (s *Service) GenerateAccessToken(r *http.Request, tx *storage.Connection, p
 // - email: email, email_verified
 // - profile: name, picture, updated_at, preferred_username
 // - phone: phone_number, phone_number_verified
-func (s *Service) GenerateIDToken(params GenerateIDTokenParams) (string, error) {
+func (s *Service) GenerateIDToken(ctx context.Context, params GenerateIDTokenParams) (string, error) {
 	config := s.config
 
 	signingJwk, err := conf.GetSigningJwk(&s.config.JWT)
@@ -763,7 +886,7 @@ func (s *Service) GenerateIDToken(params GenerateIDTokenParams) (string, error) 
 	}
 
 	// Sign the ID token with the same key as access tokens
-	signed, err := SignJWT(&config.JWT, claims)
+	signed, err := SignJWT(ctx, &config.JWT, claims)
 	if err != nil {
 		return "", err
 	}
@@ -802,6 +925,10 @@ func (s *Service) IssueRefreshToken(r *http.Request, responseHeaders http.Header
 
 			if terr := tx.Create(session); terr != nil {
 				return apierrors.NewInternalServerError("Database error creating new session").WithInternalError(terr)
+			}
+
+			if terr := user.UpdateLastSignInAt(tx); terr != nil {
+				return apierrors.NewInternalServerError("Database error updating user's last_sign_in_at").WithInternalError(terr)
 			}
 
 			signingKey, _, terr := session.GetRefreshTokenHmacKey(config.Security.DBEncryption)
@@ -862,7 +989,7 @@ func (s *Service) IssueRefreshToken(r *http.Request, responseHeaders http.Header
 	return &AccessTokenResponse{
 		Token:        tokenString,
 		TokenType:    "bearer",
-		ExpiresIn:    config.JWT.Exp,
+		ExpiresIn:    int(expiresAt - s.now().Unix()),
 		ExpiresAt:    expiresAt,
 		RefreshToken: refreshToken,
 		User:         user,
@@ -870,7 +997,7 @@ func (s *Service) IssueRefreshToken(r *http.Request, responseHeaders http.Header
 }
 
 // SignJWT signs a JWT token with the configured signing key
-func SignJWT(config *conf.JWTConfiguration, claims jwt.Claims) (string, error) {
+func SignJWT(ctx context.Context, config *conf.JWTConfiguration, claims jwt.Claims) (string, error) {
 	signingJwk, err := conf.GetSigningJwk(config)
 	if err != nil {
 		return "", err
@@ -888,7 +1015,7 @@ func SignJWT(config *conf.JWTConfiguration, claims jwt.Claims) (string, error) {
 	}
 	// this serializes the aud claim to a string
 	jwt.MarshalSingleStringAsArray = false
-	signingKey, err := conf.GetSigningKey(signingJwk)
+	signingKey, err := config.SigningKey(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -976,7 +1103,10 @@ const MinimumViableTokenSchema = `{
     "amr": {
       "type": "array",
       "items": {
-        "type": "object"
+        "anyOf": [
+          {"type": "string"},
+          {"type": "object"}
+        ]
       }
     },
     "session_id": {

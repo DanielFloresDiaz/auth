@@ -17,6 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/supabase/auth/internal/api/apierrors"
 	"github.com/supabase/auth/internal/conf"
+	"github.com/supabase/auth/internal/hooks/hookserrors"
 	"github.com/supabase/auth/internal/observability"
 
 	standardwebhooks "github.com/standard-webhooks/standard-webhooks/libraries/go"
@@ -198,12 +199,16 @@ func (o *Dispatcher) runHTTPHook(
 			if err != nil {
 				return nil, apierrors.NewBadRequestError(
 					apierrors.ErrorCodeHookPayloadInvalidContentType,
-					"Invalid Content-Type header: %s", err.Error())
+					"Invalid Content-Type header: %s",
+					err.Error(),
+				)
 			}
 			if mediaType != "application/json" {
 				return nil, apierrors.NewBadRequestError(
 					apierrors.ErrorCodeHookPayloadInvalidContentType,
-					"Invalid JSON response. Received content-type: %s", contentType)
+					"Invalid JSON response. Received content-type: %s",
+					contentType,
+				)
 			}
 
 			limitedReader := io.LimitedReader{R: rsp.Body, N: o.limitResponse}
@@ -217,9 +222,14 @@ func (o *Dispatcher) runHTTPHook(
 					return nil, apierrors.NewUnprocessableEntityError(
 						apierrors.ErrorCodeHookPayloadOverSizeLimit,
 						"Payload size exceeded size limit of %d bytes",
-						o.limitResponse)
+						o.limitResponse,
+					)
 				}
 			}
+			if err := hookserrors.Check(body); err != nil {
+				return nil, err
+			}
+
 			return body, nil
 		case http.StatusTooManyRequests, http.StatusServiceUnavailable:
 			retryAfterHeader := rsp.Header.Get("retry-after")
