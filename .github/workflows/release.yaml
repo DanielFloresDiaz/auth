@@ -112,6 +112,10 @@ jobs:
           build-args: |
             RELEASE_VERSION=${{ steps.tag_version.outputs.version }}
 
+      - name: Verify changelog exists for tag
+        if: steps.tag_version.outputs.is_dev_tag != 'true'
+        run: test -f "changelogs/${{ steps.tag_version.outputs.version }}.md"
+
       # Skip release creation for dev tags
       - name: Create Release
         if: steps.tag_version.outputs.is_dev_tag != 'true'
@@ -122,7 +126,27 @@ jobs:
             auth-linux-amd64
             auth-linux-arm64
           tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: changelogs/${{ steps.tag_version.outputs.version }}.md
           draft: false
           prerelease: false
           overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create latest release
+        if: steps.tag_version.outputs.is_dev_tag != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            auth
+            auth-linux-amd64
+            auth-linux-arm64
+          tag_name: latest
+          name: latest
+          body_path: changelogs/${{ steps.tag_version.outputs.version }}.md
+          draft: false
+          prerelease: false
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
