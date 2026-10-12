@@ -65,9 +65,6 @@ jobs:
   test:
     if: ${{ !contains(github.event.head_commit.message, '[skip test]') && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push' || github.event_name == 'workflow_call') }}
     needs: [lint]
-    strategy:
-      matrix:
-        go-version: [1.25.5]
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -90,7 +87,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version-file: go.mod
       - name: Init Database
         run: psql -f hack/init_postgres.sql postgresql://postgres:root@localhost:5437/postgres
       - name: Run migrations
@@ -167,7 +164,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: 1.25.5
+          go-version-file: go.mod
       - name: Download coverage file
         uses: actions/download-artifact@v4
         with:
