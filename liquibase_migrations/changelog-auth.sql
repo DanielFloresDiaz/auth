@@ -125,6 +125,8 @@ CREATE TABLE IF NOT EXISTS "auth".api_keys (
 	tier_time "public".tier_times NOT NULL DEFAULT 'low',
 	tier_usage "public".tier_usages NOT NULL DEFAULT 'low',
 	"key" text UNIQUE NOT NULL,
+	iat timestamptz NOT NULL,
+	exp timestamptz NOT NULL,
 	created_at timestamptz DEFAULT current_timestamp,
 	updated_at timestamptz DEFAULT current_timestamp,
 	CONSTRAINT api_keys_user_id_fkey FOREIGN KEY (organization_id) REFERENCES "auth".organizations(id) ON DELETE CASCADE,
