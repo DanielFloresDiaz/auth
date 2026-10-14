@@ -166,3 +166,119 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 --rollback DROP POLICY IF EXISTS api_key_usage_summary_policy ON "auth".api_key_usage_summary;
+
+--changeset solomon.auth-rls:10 labels:auth context:auth
+--comment: allow project_admin on organization_usage_summary scoped by project_id
+DROP POLICY IF EXISTS organization_usage_summary_policy ON "auth".organization_usage_summary;
+DO $$ BEGIN
+    CREATE POLICY organization_usage_summary_policy ON "auth".organization_usage_summary
+    FOR ALL
+    USING (
+        (organization_id = current_setting('app.current_organization', true)::uuid AND
+        current_setting('app.organization_role', true)::text IN ('admin', 'api_key'))
+        OR
+        (
+            current_setting('app.organization_role', true)::text = 'project_admin'
+            AND
+            current_setting('app.current_project', true)::uuid = project_id
+        )
+    )
+    WITH CHECK (
+        (organization_id = current_setting('app.current_organization', true)::uuid AND
+        current_setting('app.organization_role', true)::text IN ('admin', 'api_key'))
+        OR
+        (
+            current_setting('app.organization_role', true)::text = 'project_admin'
+            AND
+            current_setting('app.current_project', true)::uuid = project_id
+        )
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+--rollback DROP POLICY IF EXISTS organization_usage_summary_policy ON "auth".organization_usage_summary;
+--rollback DO $$ BEGIN CREATE POLICY organization_usage_summary_policy ON "auth".organization_usage_summary FOR ALL USING ((organization_id = current_setting('app.current_organization', true)::uuid AND current_setting('app.organization_role', true)::text IN ('admin', 'api_key'))) WITH CHECK ((organization_id = current_setting('app.current_organization', true)::uuid AND current_setting('app.organization_role', true)::text IN ('admin', 'api_key'))); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+--changeset solomon.auth-rls:11 labels:auth context:auth
+--comment: allow project_admin on user_usage_summary scoped by project_id
+DROP POLICY IF EXISTS user_usage_summary_policy ON "auth".user_usage_summary;
+DO $$ BEGIN
+    CREATE POLICY user_usage_summary_policy ON "auth".user_usage_summary
+    FOR ALL
+    USING (
+        (organization_id = current_setting('app.current_organization', true)::uuid AND
+        current_setting('app.organization_role', true)::text IN ('admin', 'api_key')) OR
+        (user_id = current_setting('app.current_owner', true)::uuid)
+        OR
+        (
+            current_setting('app.organization_role', true)::text = 'project_admin'
+            AND
+            current_setting('app.current_project', true)::uuid = project_id
+        )
+    )
+    WITH CHECK (
+        (organization_id = current_setting('app.current_organization', true)::uuid AND
+        current_setting('app.organization_role', true)::text IN ('admin', 'api_key')) OR
+        (user_id = current_setting('app.current_owner', true)::uuid)
+        OR
+        (
+            current_setting('app.organization_role', true)::text = 'project_admin'
+            AND
+            current_setting('app.current_project', true)::uuid = project_id
+        )
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+--rollback DROP POLICY IF EXISTS user_usage_summary_policy ON "auth".user_usage_summary;
+--rollback DO $$ BEGIN CREATE POLICY user_usage_summary_policy ON "auth".user_usage_summary FOR ALL USING (((organization_id = current_setting('app.current_organization', true)::uuid AND current_setting('app.organization_role', true)::text IN ('admin', 'api_key')) OR (user_id = current_setting('app.current_owner', true)::uuid))) WITH CHECK (((organization_id = current_setting('app.current_organization', true)::uuid AND current_setting('app.organization_role', true)::text IN ('admin', 'api_key')) OR (user_id = current_setting('app.current_owner', true)::uuid))); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+--changeset solomon.auth-rls:12 labels:auth context:auth
+--comment: allow project_admin on api_key_usage_summary scoped by project_id
+DROP POLICY IF EXISTS api_key_usage_summary_policy ON "auth".api_key_usage_summary;
+DO $$ BEGIN
+    CREATE POLICY api_key_usage_summary_policy ON "auth".api_key_usage_summary
+    FOR ALL
+    USING (
+        (organization_id = current_setting('app.current_organization', true)::uuid AND
+        current_setting('app.organization_role', true)::text IN ('admin', 'api_key'))
+        OR
+        (
+            current_setting('app.organization_role', true)::text = 'project_admin'
+            AND
+            current_setting('app.current_project', true)::uuid = project_id
+        )
+    )
+    WITH CHECK (
+        (organization_id = current_setting('app.current_organization', true)::uuid AND
+        current_setting('app.organization_role', true)::text IN ('admin', 'api_key'))
+        OR
+        (
+            current_setting('app.organization_role', true)::text = 'project_admin'
+            AND
+            current_setting('app.current_project', true)::uuid = project_id
+        )
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+--rollback DROP POLICY IF EXISTS api_key_usage_summary_policy ON "auth".api_key_usage_summary;
+--rollback DO $$ BEGIN CREATE POLICY api_key_usage_summary_policy ON "auth".api_key_usage_summary FOR ALL USING ((organization_id = current_setting('app.current_organization', true)::uuid AND current_setting('app.organization_role', true)::text IN ('admin', 'api_key'))) WITH CHECK ((organization_id = current_setting('app.current_organization', true)::uuid AND current_setting('app.organization_role', true)::text IN ('admin', 'api_key'))); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+--changeset solomon.auth-rls:13 labels:auth context:auth
+--comment: create rls policy on project_usage_summary for project_admin
+ALTER TABLE "auth".project_usage_summary ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+    CREATE POLICY project_usage_summary_policy ON "auth".project_usage_summary
+    FOR ALL
+    USING (
+        current_setting('app.organization_role', true)::text = 'project_admin'
+        AND
+        current_setting('app.current_project', true)::uuid = project_id
+    )
+    WITH CHECK (
+        current_setting('app.organization_role', true)::text = 'project_admin'
+        AND
+        current_setting('app.current_project', true)::uuid = project_id
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+--rollback DROP POLICY IF EXISTS project_usage_summary_policy ON "auth".project_usage_summary;
+--rollback ALTER TABLE "auth".project_usage_summary DISABLE ROW LEVEL SECURITY;

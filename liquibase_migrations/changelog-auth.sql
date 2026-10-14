@@ -519,3 +519,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS whitelist_confirmations_token_hash_idx
 --rollback DROP INDEX IF EXISTS "auth".whitelist_confirmations_project_email_idx;
 --rollback DROP TABLE IF EXISTS "auth".whitelist_confirmations;
 
+--changeset solomon.auth:37 labels:auth context:auth
+--comment: align usage summary project_id with parent auth rows for project-scoped RLS
+UPDATE "auth".organization_usage_summary s
+SET project_id = o.project_id
+FROM "auth".organizations o
+WHERE s.organization_id = o.id AND s.project_id IS DISTINCT FROM o.project_id;
+UPDATE "auth".user_usage_summary s
+SET project_id = u.project_id
+FROM "auth".users u
+WHERE s.user_id = u.id AND s.project_id IS DISTINCT FROM u.project_id;
+UPDATE "auth".api_key_usage_summary s
+SET project_id = k.project_id
+FROM "auth".api_keys k
+WHERE s.api_key_id = k.id AND s.project_id IS DISTINCT FROM k.project_id;
+--rollback empty
+
