@@ -119,3 +119,8 @@ GRANT INSERT, SELECT ON "auth".whitelist_requests TO auth_admin;
 --comment: grant whitelist confirmation writes to auth_admin when that role exists
 GRANT INSERT, SELECT, UPDATE, DELETE ON "auth".whitelist_confirmations TO auth_admin;
 --rollback REVOKE INSERT, SELECT, UPDATE, DELETE ON "auth".whitelist_confirmations FROM auth_admin;
+
+--changeset solomon.auth:grant:14 labels:auth context:auth
+--comment: allow org admins to reassign api_key_usage_summary on API key recreate (RLS still scopes rows)
+GRANT UPDATE ON "auth".api_key_usage_summary TO solomon_auth_user_role;
+--rollback REVOKE UPDATE ON "auth".api_key_usage_summary FROM solomon_auth_user_role;
