@@ -549,3 +549,8 @@ ALTER TABLE "auth".api_keys
   ADD COLUMN IF NOT EXISTS status "auth".api_key_status NOT NULL DEFAULT 'active';
 --rollback ALTER TABLE "auth".api_keys DROP COLUMN IF EXISTS status;
 --rollback DROP TYPE IF EXISTS "auth"."api_key_status";
+
+--changeset solomon.auth:39 labels:auth context:auth
+--comment: add banned to api_key_status enum
+ALTER TYPE "auth"."api_key_status" ADD VALUE IF NOT EXISTS 'banned';
+--rollback empty
