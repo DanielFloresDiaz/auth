@@ -535,3 +535,17 @@ FROM "auth".api_keys k
 WHERE s.api_key_id = k.id AND s.project_id IS DISTINCT FROM k.project_id;
 --rollback empty
 
+
+--changeset solomon.auth:38 labels:auth context:auth
+--comment: add api_key_status and status column on api_keys
+DO $$ BEGIN
+CREATE TYPE "auth"."api_key_status" AS ENUM (
+  'active',
+  'disabled'
+);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+ALTER TABLE "auth".api_keys
+  ADD COLUMN IF NOT EXISTS status "auth".api_key_status NOT NULL DEFAULT 'active';
+--rollback ALTER TABLE "auth".api_keys DROP COLUMN IF EXISTS status;
+--rollback DROP TYPE IF EXISTS "auth"."api_key_status";
