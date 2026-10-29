@@ -94,7 +94,7 @@ func truncateAll(conn *storage.Connection) error {
 			"whitelist_requests",
 			(&pop.Model{Value: Project{}}).TableName(),
 			(&pop.Model{Value: Organization{}}).TableName(),
-			(&pop.Model{Value: OrganizationTier{}}).TableName(),
+			(&pop.Model{Value: OrganizationConfig{}}).TableName(),
 			(&pop.Model{Value: User{}}).TableName(),
 			(&pop.Model{Value: Identity{}}).TableName(),
 			(&pop.Model{Value: RefreshToken{}}).TableName(),

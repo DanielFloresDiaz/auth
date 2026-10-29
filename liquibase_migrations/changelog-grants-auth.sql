@@ -16,9 +16,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON "auth".organizations TO solomon_auth_use
 --rollback REVOKE SELECT, INSERT, UPDATE, DELETE ON "auth".organizations FROM solomon_auth_user_role;
 
 --changeset solomon.auth:grant:4.1 labels:auth context:auth
---comment: grant select on organizations_tier to solomon_auth_user_role
-GRANT SELECT ON "auth".organizations_tier TO solomon_auth_user_role;
---rollback REVOKE SELECT ON "auth".organizations_tier FROM solomon_auth_user_role;
+--comment: grant select on organizations_config to solomon_auth_user_role
+GRANT SELECT ON "auth".organizations_config TO solomon_auth_user_role;
+--rollback REVOKE SELECT ON "auth".organizations_config FROM solomon_auth_user_role;
 
 --changeset solomon.auth:grant:6 labels:auth context:auth
 --comment: grant UPDATE on users to solomon_auth_admin_role
@@ -26,9 +26,9 @@ GRANT SELECT, UPDATE ON "auth".users TO solomon_auth_admin_role;
 --rollback REVOKE UPDATE ON "auth".users FROM solomon_auth_admin_role;
 
 --changeset solomon.auth:grant:7 labels:auth context:auth
---comment: grant INSERT, UPDATE on organizations_tier to solomon_auth_admin_role
-GRANT INSERT, UPDATE ON "auth".organizations_tier TO solomon_auth_admin_role;
---rollback REVOKE INSERT, UPDATE ON "auth".organizations_tier FROM solomon_auth_admin_role;
+--comment: grant INSERT, UPDATE on organizations_config to solomon_auth_admin_role
+GRANT INSERT, UPDATE ON "auth".organizations_config TO solomon_auth_admin_role;
+--rollback REVOKE INSERT, UPDATE ON "auth".organizations_config FROM solomon_auth_admin_role;
 
 --changeset solomon.auth:grant:7.1 labels:auth context:auth
 --comment: grant SELECT on organizations_periodic_limit to solomon_auth_user_role
@@ -124,3 +124,4 @@ GRANT INSERT, SELECT, UPDATE, DELETE ON "auth".whitelist_confirmations TO auth_a
 --comment: allow org admins to reassign api_key_usage_summary on API key recreate (RLS still scopes rows)
 GRANT UPDATE ON "auth".api_key_usage_summary TO solomon_auth_user_role;
 --rollback REVOKE UPDATE ON "auth".api_key_usage_summary FROM solomon_auth_user_role;
+

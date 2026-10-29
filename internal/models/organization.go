@@ -20,7 +20,7 @@ type Organization struct {
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
 
-type OrganizationTier struct {
+type OrganizationConfig struct {
 	OrganizationID  uuid.UUID `json:"organization_id" db:"organization_id"`
 	ProjectID       uuid.UUID `json:"project_id" db:"project_id"`
 	Tier            string    `json:"tier" db:"tier"`
@@ -40,17 +40,17 @@ func (Organization) TableName() string {
 	return tableName
 }
 
-func (OrganizationTier) TableName() string {
-	return "organizations_tier"
+func (OrganizationConfig) TableName() string {
+	return "organizations_config"
 }
 
-func findOrganizationTier(tx *storage.Connection, query string, args ...interface{}) (*OrganizationTier, error) {
-	obj := &OrganizationTier{}
+func findOrganizationConfig(tx *storage.Connection, query string, args ...interface{}) (*OrganizationConfig, error) {
+	obj := &OrganizationConfig{}
 	if err := tx.Eager().Q().Where(query, args...).First(obj); err != nil {
 		if errors.Cause(err) == sql.ErrNoRows {
 			return nil, nil // Or handle as needed
 		}
-		return nil, errors.Wrap(err, "error finding organization tier")
+		return nil, errors.Wrap(err, "error finding organization config")
 	}
 
 	return obj, nil
@@ -83,11 +83,11 @@ func FindOrganizationZDR(tx *storage.Connection, organization_id uuid.UUID) (boo
 	return org.ZDR, nil
 }
 
-func tiersFromOrganizationTier(organizationTier *OrganizationTier, organization_role string) (string, string, string) {
+func tiersFromOrganizationConfig(organizationConfig *OrganizationConfig, organization_role string) (string, string, string) {
 	if organization_role == "admin" || organization_role == "project_admin" {
-		return organizationTier.AdminTierModel, organizationTier.AdminTierTime, organizationTier.AdminTierUsage
+		return organizationConfig.AdminTierModel, organizationConfig.AdminTierTime, organizationConfig.AdminTierUsage
 	}
-	return organizationTier.ClientTierModel, organizationTier.ClientTierTime, organizationTier.ClientTierUsage
+	return organizationConfig.ClientTierModel, organizationConfig.ClientTierTime, organizationConfig.ClientTierUsage
 }
 
 func FindTiersByOrganizationIDAndOrganizationRole(
@@ -104,20 +104,20 @@ func FindTiersByOrganizationIDAndOrganizationRole(
 		return tier_model, tier_time, tier_usage, nil
 	}
 
-	organizationTier, err := findOrganizationTier(tx, "organization_id = ? AND project_id = ?", organization_id, project_id)
+	organizationConfig, err := findOrganizationConfig(tx, "organization_id = ? AND project_id = ?", organization_id, project_id)
 	if err != nil {
 		return "", "", "", err
 	}
-	if organizationTier == nil {
-		organizationTier, err = findOrganizationTier(tx, "organization_id = ? AND project_id = ?", uuid.Nil, project_id)
+	if organizationConfig == nil {
+		organizationConfig, err = findOrganizationConfig(tx, "organization_id = ? AND project_id = ?", uuid.Nil, project_id)
 		if err != nil {
 			return "", "", "", err
 		}
 	}
-	if organizationTier == nil {
+	if organizationConfig == nil {
 		return tier_model, tier_time, tier_usage, nil
 	}
 
-	tier_model, tier_time, tier_usage = tiersFromOrganizationTier(organizationTier, organization_role)
+	tier_model, tier_time, tier_usage = tiersFromOrganizationConfig(organizationConfig, organization_role)
 	return tier_model, tier_time, tier_usage, nil
 }

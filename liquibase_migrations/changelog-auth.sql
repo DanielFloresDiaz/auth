@@ -54,23 +54,25 @@ CREATE TABLE IF NOT EXISTS "auth".organizations (
 --rollback DROP TABLE "auth".organizations;
 
 --changeset solomon.auth:5.1 labels:auth context:auth
---comment: create organizations_tier table
-CREATE TABLE IF NOT EXISTS "auth".organizations_tier (
+--comment: create organizations_config table (tier and customer price policy)
+CREATE TABLE IF NOT EXISTS "auth".organizations_config (
 	organization_id uuid NOT NULL,
 	project_id uuid NOT NULL,
-	tier text DEFAULT 'free',
-	admin_tier_model "public".tier_models DEFAULT 'low',
-	admin_tier_time "public".tier_times DEFAULT 'low',
-	admin_tier_usage "public".tier_usages DEFAULT 'low',
-	client_tier_model "public".tier_models DEFAULT 'low',
-	client_tier_time "public".tier_times DEFAULT 'low',
-	client_tier_usage "public".tier_usages DEFAULT 'low',
+	tier text NOT NULL DEFAULT 'free',
+	admin_tier_model "public".tier_models NOT NULL DEFAULT 'low',
+	admin_tier_time "public".tier_times NOT NULL DEFAULT 'low',
+	admin_tier_usage "public".tier_usages NOT NULL DEFAULT 'low',
+	client_tier_model "public".tier_models NOT NULL DEFAULT 'low',
+	client_tier_time "public".tier_times NOT NULL DEFAULT 'low',
+	client_tier_usage "public".tier_usages NOT NULL DEFAULT 'low',
+	commission real NOT NULL DEFAULT 0,
+	disable_cached_tokens boolean NOT NULL DEFAULT false,
 	created_at timestamptz DEFAULT current_timestamp,
 	updated_at timestamptz DEFAULT current_timestamp,
-	CONSTRAINT organizations_tier_pkey PRIMARY KEY (organization_id, project_id),
-	CONSTRAINT organizations_tier_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE
+	CONSTRAINT organizations_config_pkey PRIMARY KEY (organization_id, project_id),
+	CONSTRAINT organizations_config_project_id_fkey FOREIGN KEY (project_id) REFERENCES "auth".projects(id) ON DELETE CASCADE
 );
---rollback DROP TABLE "auth".organizations_tier;
+--rollback DROP TABLE "auth".organizations_config;
 
 --changeset solomon.auth:6 labels:auth context:auth
 --comment: create smtp_configs_organizations table

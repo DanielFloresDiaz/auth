@@ -54,7 +54,7 @@ func InitializeTestDatabase(t *testing.T, db *storage.Connection, config *conf.G
 	}
 
 	// Insert organization tier
-	if err := setup_db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations_tier (organization_id, project_id, tier) VALUES ('%s', '%s', 'free')", organization_id, project_id)).Exec(); err != nil {
+	if err := setup_db.RawQuery(fmt.Sprintf("INSERT INTO auth.organizations_config (organization_id, project_id, tier) VALUES ('%s', '%s', 'free')", organization_id, project_id)).Exec(); err != nil {
 		panic(err)
 	}
 
@@ -100,7 +100,7 @@ func ReseedTestTenant(t *testing.T, db *storage.Connection, organizationID, proj
 		organizationID, "test_organization_"+organizationID.String(), projectID, admin.ID,
 	).Exec())
 	require.NoError(t, setupDB.RawQuery(
-		"INSERT INTO auth.organizations_tier (organization_id, project_id, tier) VALUES (?, ?, 'free') ON CONFLICT (organization_id, project_id) DO NOTHING",
+		"INSERT INTO auth.organizations_config (organization_id, project_id, tier) VALUES (?, ?, 'free') ON CONFLICT (organization_id, project_id) DO NOTHING",
 		organizationID, projectID,
 	).Exec())
 }
