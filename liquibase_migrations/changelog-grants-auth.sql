@@ -125,3 +125,14 @@ GRANT INSERT, SELECT, UPDATE, DELETE ON "auth".whitelist_confirmations TO auth_a
 GRANT UPDATE ON "auth".api_key_usage_summary TO solomon_auth_user_role;
 --rollback REVOKE UPDATE ON "auth".api_key_usage_summary FROM solomon_auth_user_role;
 
+--changeset solomon.auth:grant:15 labels:auth context:auth
+--comment: credit auto-buyout settings for the API and buyout requests for the scheduler
+GRANT SELECT ON "auth".organizations_credit_auto_buyout TO solomon_auth_user_role;
+GRANT SELECT, INSERT ON "auth".organizations_credit_buyout_requests TO solomon_auth_user_role;
+GRANT SELECT, INSERT, UPDATE ON "auth".organizations_credit_auto_buyout TO solomon_auth_admin_role;
+GRANT SELECT, INSERT, UPDATE ON "auth".organizations_credit_buyout_requests TO solomon_auth_admin_role;
+--rollback REVOKE SELECT, INSERT, UPDATE ON "auth".organizations_credit_buyout_requests FROM solomon_auth_admin_role;
+--rollback REVOKE SELECT, INSERT, UPDATE ON "auth".organizations_credit_auto_buyout FROM solomon_auth_admin_role;
+--rollback REVOKE SELECT, INSERT ON "auth".organizations_credit_buyout_requests FROM solomon_auth_user_role;
+--rollback REVOKE SELECT ON "auth".organizations_credit_auto_buyout FROM solomon_auth_user_role;
+

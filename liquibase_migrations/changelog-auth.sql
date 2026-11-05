@@ -556,3 +556,50 @@ ALTER TABLE "auth".api_keys
 --comment: add banned to api_key_status enum
 ALTER TYPE "auth"."api_key_status" ADD VALUE IF NOT EXISTS 'banned';
 --rollback empty
+
+--changeset solomon.auth:40 labels:auth context:auth
+--comment: organization credit auto-buyout settings and the scheduler buyout queue
+DO $$ BEGIN
+CREATE TYPE "auth"."credit_buyout_status" AS ENUM (
+  'pending',
+  'processing',
+  'succeeded',
+  'failed',
+  'skipped'
+);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+CREATE TABLE IF NOT EXISTS "auth".organizations_credit_auto_buyout (
+    organization_id uuid PRIMARY KEY,
+    enabled boolean NOT NULL DEFAULT false,
+    threshold real NOT NULL DEFAULT 10 CHECK (threshold >= 10),
+    credits integer NOT NULL CHECK (credits >= 5 AND credits % 5 = 0),
+    created_at timestamptz DEFAULT current_timestamp,
+    updated_at timestamptz DEFAULT current_timestamp,
+    CONSTRAINT organizations_credit_auto_buyout_organization_id_fkey
+        FOREIGN KEY (organization_id) REFERENCES "auth".organizations(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS "auth".organizations_credit_buyout_requests (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id uuid NOT NULL,
+    credits integer NOT NULL CHECK (credits >= 5 AND credits % 5 = 0),
+    status "auth".credit_buyout_status NOT NULL DEFAULT 'pending',
+    stripe_invoice_id text NULL,
+    error text NULL,
+    created_at timestamptz DEFAULT current_timestamp,
+    updated_at timestamptz DEFAULT current_timestamp,
+    CONSTRAINT organizations_credit_buyout_requests_organization_id_fkey
+        FOREIGN KEY (organization_id) REFERENCES "auth".organizations(id) ON DELETE CASCADE
+);
+--rollback DROP TABLE IF EXISTS "auth".organizations_credit_buyout_requests;
+--rollback DROP TABLE IF EXISTS "auth".organizations_credit_auto_buyout;
+--rollback DROP TYPE IF EXISTS "auth"."credit_buyout_status";
+
+--changeset solomon.auth:41 labels:auth context:auth
+--comment: store the card collected for automatic buyout and require a new opt-in
+ALTER TABLE "auth".organizations_credit_auto_buyout
+    ADD COLUMN IF NOT EXISTS stripe_payment_method_id text NULL;
+UPDATE "auth".organizations_credit_auto_buyout
+    SET enabled = false, updated_at = current_timestamp
+    WHERE enabled = true;
+--rollback ALTER TABLE "auth".organizations_credit_auto_buyout DROP COLUMN IF EXISTS stripe_payment_method_id;

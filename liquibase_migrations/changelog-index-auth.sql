@@ -65,3 +65,16 @@ CREATE INDEX IF NOT EXISTS identities_project_id_index ON "auth".identities (pro
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_partial_key ON "auth".users (email, organization_id, project_id) WHERE (is_sso_user = false);
 COMMENT ON INDEX "auth".users_email_partial_key IS 'auth: a partial unique index that applies only when is_sso_user is false';
 --rollback DROP INDEX "auth".users_email_partial_key;
+
+--changeset solomon.auth-index:15 labels:auth context:auth
+--comment: look up credit buyout requests by organization, newest first
+CREATE INDEX IF NOT EXISTS organizations_credit_buyout_requests_organization_id_idx
+    ON "auth".organizations_credit_buyout_requests (organization_id, created_at DESC);
+--rollback DROP INDEX "auth".organizations_credit_buyout_requests_organization_id_idx;
+
+--changeset solomon.auth-index:16 labels:auth context:auth
+--comment: one pending or processing credit buyout per organization
+CREATE UNIQUE INDEX IF NOT EXISTS organizations_credit_buyout_requests_open_idx
+    ON "auth".organizations_credit_buyout_requests (organization_id)
+    WHERE status IN ('pending', 'processing');
+--rollback DROP INDEX "auth".organizations_credit_buyout_requests_open_idx;
