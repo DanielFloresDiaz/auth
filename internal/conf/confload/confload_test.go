@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kelseyhightower/envconfig"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/supabase/auth/internal/conf"
@@ -426,4 +427,23 @@ func TestLoading(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, cfg)
 	}
+}
+
+func TestHandoffRedirectURIsEnv(t *testing.T) {
+	t.Setenv("GOTRUE_DB_DRIVER", "postgres")
+	t.Setenv("GOTRUE_JWT_SECRET", "secret")
+	t.Setenv("API_EXTERNAL_URL", "http://localhost:9999")
+	t.Setenv("GOTRUE_SITE_URL", "http://localhost:9999")
+	t.Setenv("GOTRUE_OAUTH_SERVER_ENABLED", "true")
+	t.Setenv("GOTRUE_OAUTH_SERVER_HANDOFF_CLIENT_ID", "c3e1a7b2-4d58-4f0a-9c6e-2b7d8f0a1e34")
+	t.Setenv("GOTRUE_OAUTH_SERVER_HANDOFF_REDIRECT_URIS", "http://localhost:5173/auth/handoff,http://localhost:5174/auth/handoff")
+
+	cfg := new(conf.GlobalConfiguration)
+	require.NoError(t, envconfig.Process("gotrue", cfg))
+	assert.True(t, cfg.OAuthServer.Enabled)
+	assert.Equal(t, "c3e1a7b2-4d58-4f0a-9c6e-2b7d8f0a1e34", cfg.OAuthServer.HandoffClientID)
+	assert.Equal(t, []string{
+		"http://localhost:5173/auth/handoff",
+		"http://localhost:5174/auth/handoff",
+	}, cfg.OAuthServer.HandoffRedirectURIs)
 }

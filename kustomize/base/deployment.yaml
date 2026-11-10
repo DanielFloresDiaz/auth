@@ -222,6 +222,21 @@ spec:
                 configMapKeyRef:
                   name: auth-generated-config
                   key: GOTRUE_URI_ALLOW_LIST
+            - name: GOTRUE_OAUTH_SERVER_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-generated-config
+                  key: GOTRUE_OAUTH_SERVER_ENABLED
+            - name: GOTRUE_OAUTH_SERVER_HANDOFF_CLIENT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-generated-config
+                  key: GOTRUE_OAUTH_SERVER_HANDOFF_CLIENT_ID
+            - name: GOTRUE_OAUTH_SERVER_HANDOFF_REDIRECT_URIS
+              valueFrom:
+                configMapKeyRef:
+                  name: auth-generated-config
+                  key: GOTRUE_OAUTH_SERVER_HANDOFF_REDIRECT_URIS
                   
             # Security Configuration
             - name: GOTRUE_LOG_LEVEL

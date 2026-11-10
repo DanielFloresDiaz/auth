@@ -82,6 +82,12 @@ type OAuthServerConfiguration struct {
 	AllowDynamicRegistration bool          `json:"allow_dynamic_registration" split_words:"true"`
 	AuthorizationPath        string        `json:"authorization_path" split_words:"true"`
 	AuthorizationTTL         time.Duration `json:"authorization_ttl" split_words:"true" default:"10m"`
+	// HandoffClientID is the public OAuth client the product frontends use to
+	// mint a one-time code for another origin. Empty skips the startup upsert.
+	HandoffClientID string `json:"handoff_client_id" split_words:"true"`
+	// HandoffRedirectURIs are the exact {origin}/auth/handoff callbacks for that client.
+	// The envconfig key is explicit: split_words turns the trailing "URIs" into "UR_IS".
+	HandoffRedirectURIs []string `json:"handoff_redirect_uris" envconfig:"HANDOFF_REDIRECT_URIS"`
 	// Placeholder for now, for (near) future extensibility
 	DefaultScope string `json:"default_scope" split_words:"true" default:"email"`
 }

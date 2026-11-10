@@ -130,6 +130,9 @@ func (s *Server) OAuthServerAuthorize(w http.ResponseWriter, r *http.Request) er
 	// From this point on, we have valid client + redirect_uri + all params, so we can redirect errors
 	// validate all other parameters - now we can redirect errors
 	if err := s.validateRemainingAuthorizeParams(params); err != nil {
+		if acceptsJSON(r) {
+			return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "%s", err.Error())
+		}
 		errorRedirectURL := s.buildErrorRedirectURL(params.RedirectURI, oAuth2ErrorInvalidRequest, err.Error(), params.State)
 		http.Redirect(w, r, errorRedirectURL, http.StatusFound)
 		return nil
@@ -149,6 +152,9 @@ func (s *Server) OAuthServerAuthorize(w http.ResponseWriter, r *http.Request) er
 	})
 
 	if err := models.CreateOAuthServerAuthorization(db, authorization); err != nil {
+		if acceptsJSON(r) {
+			return apierrors.NewInternalServerError("error creating authorization").WithInternalError(err)
+		}
 		// Error creating authorization - redirect with server_error
 		errorRedirectURL := s.buildErrorRedirectURL(params.RedirectURI, oAuth2ErrorServerError, "error creating authorization", params.State)
 		http.Redirect(w, r, errorRedirectURL, http.StatusFound)
@@ -157,6 +163,14 @@ func (s *Server) OAuthServerAuthorize(w http.ResponseWriter, r *http.Request) er
 
 	observability.LogEntrySetField(r, "authorization_id", authorization.AuthorizationID)
 	observability.LogEntrySetField(r, "client_id", client.ID.String())
+
+	// A cross-origin SPA cannot read a 302 Location. JSON keeps the browser on
+	// its own origin and lets it continue with the user's bearer token.
+	if acceptsJSON(r) {
+		return shared.SendJSON(w, http.StatusOK, map[string]string{
+			"authorization_id": authorization.AuthorizationID,
+		})
+	}
 
 	// Redirect to authorization path with authorization_id
 	if config.OAuthServer.AuthorizationPath == "" {
@@ -410,6 +424,13 @@ func (s *Server) OAuthServerConsent(w http.ResponseWriter, r *http.Request) erro
 	}
 
 	return shared.SendJSON(w, http.StatusOK, response)
+}
+
+// acceptsJSON reports whether the caller asked for a JSON body instead of the
+// browser redirect. Matching is a substring so "application/json; charset=utf-8"
+// and mixed Accept lists still count.
+func acceptsJSON(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "application/json")
 }
 
 // Helper functions

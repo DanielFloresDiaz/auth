@@ -21,6 +21,9 @@ configMapGenerator:
       - API_EXTERNAL_URL=https://solomonauth.com/
       - GOTRUE_SITE_URL=https://solomonauth.com/
       - GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://solomonauth.com/callback
-      - GOTRUE_URI_ALLOW_LIST=https://insidec.org/auth/callback
+      - GOTRUE_URI_ALLOW_LIST=https://insidec.org,https://insidec.org/auth/callback,https://dashboard.insidec.org,https://dashboard.insidec.org/auth/callback,https://app.zion-gateway.com
+      - GOTRUE_OAUTH_SERVER_ENABLED=true
+      - GOTRUE_OAUTH_SERVER_HANDOFF_CLIENT_ID=c3e1a7b2-4d58-4f0a-9c6e-2b7d8f0a1e34
+      - GOTRUE_OAUTH_SERVER_HANDOFF_REDIRECT_URIS=https://app.zion-gateway.com/auth/handoff
 
 

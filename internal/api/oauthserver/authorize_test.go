@@ -325,6 +325,63 @@ func (ts *OAuthAuthorizeTestSuite) reload(authorizationID string) *models.OAuthS
 	return a
 }
 
+func (ts *OAuthAuthorizeTestSuite) TestEnsureHandoffClient_UpsertsPublicClient() {
+	const clientID = "c3e1a7b2-4d58-4f0a-9c6e-2b7d8f0a1e34"
+	ts.Config.OAuthServer.HandoffClientID = clientID
+	ts.Config.OAuthServer.HandoffRedirectURIs = []string{
+		"http://localhost:5173/auth/handoff",
+		" http://localhost:5174/auth/handoff ",
+	}
+	require.NoError(ts.T(), ts.Server.EnsureHandoffClient(context.Background()))
+
+	stored, err := models.FindOAuthServerClientByID(ts.DB, uuid.Must(uuid.FromString(clientID)))
+	require.NoError(ts.T(), err)
+	assert.Equal(ts.T(), models.OAuthServerClientTypePublic, stored.ClientType)
+	assert.Equal(ts.T(), models.TokenEndpointAuthMethodNone, stored.TokenEndpointAuthMethod)
+	assert.Equal(ts.T(), []string{
+		"http://localhost:5173/auth/handoff",
+		"http://localhost:5174/auth/handoff",
+	}, stored.GetRedirectURIs())
+
+	ts.Config.OAuthServer.HandoffRedirectURIs = []string{"http://localhost:5173/auth/handoff"}
+	require.NoError(ts.T(), ts.Server.EnsureHandoffClient(context.Background()))
+	updated, err := models.FindOAuthServerClientByID(ts.DB, uuid.Must(uuid.FromString(clientID)))
+	require.NoError(ts.T(), err)
+	assert.Equal(ts.T(), []string{"http://localhost:5173/auth/handoff"}, updated.GetRedirectURIs())
+
+	ts.Config.OAuthServer.HandoffClientID = ""
+	ts.Config.OAuthServer.HandoffRedirectURIs = nil
+}
+
+func (ts *OAuthAuthorizeTestSuite) TestAuthorize_JSONReturnsAuthorizationID() {
+	client := ts.createClient()
+	q := url.Values{
+		"client_id":             []string{client.ID.String()},
+		"redirect_uri":          []string{"https://example.com/callback"},
+		"scope":                 []string{"openid profile"},
+		"code_challenge":        []string{"abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG"},
+		"code_challenge_method": []string{"S256"},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?"+q.Encode(), nil)
+	req.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+
+	require.NoError(ts.T(), ts.Server.OAuthServerAuthorize(w, req))
+	assert.Equal(ts.T(), http.StatusOK, w.Code)
+	assert.Empty(ts.T(), w.Header().Get("Location"))
+
+	var resp struct {
+		AuthorizationID string `json:"authorization_id"`
+	}
+	require.NoError(ts.T(), json.Unmarshal(w.Body.Bytes(), &resp))
+	require.NotEmpty(ts.T(), resp.AuthorizationID)
+
+	stored := ts.reload(resp.AuthorizationID)
+	assert.Equal(ts.T(), client.ID, stored.ClientID)
+	assert.Equal(ts.T(), models.OAuthServerAuthorizationPending, stored.Status)
+	assert.Nil(ts.T(), stored.UserID)
+}
+
 // ---------- OAuthServerGetAuthorization ----------
 
 func (ts *OAuthAuthorizeTestSuite) TestGetAuthorization_SetsUserAndReturnsDetails() {

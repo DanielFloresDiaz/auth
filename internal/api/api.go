@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"regexp"
 	"time"
@@ -138,6 +139,9 @@ func NewAPIWithVersion(globalConfig *conf.GlobalConfiguration, db *storage.Conne
 	// Initialize OAuth server (only if enabled)
 	if globalConfig.OAuthServer.Enabled {
 		api.oauthServer = oauthserver.NewServer(globalConfig, db, api.tokenService)
+		if err := api.oauthServer.EnsureHandoffClient(context.Background()); err != nil {
+			logrus.WithError(err).Error("failed to upsert frontend handoff OAuth client")
+		}
 	}
 
 	api.scim = scim.NewServer(globalConfig)
