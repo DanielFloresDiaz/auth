@@ -1,0 +1,58 @@
+color_scheme: dark
+colors:
+  page_bg: "#0e1014"
+  card_bg: "#16140f"
+  card_border: "#3a3428"
+  text: "#f7f4ec"
+  muted: "#b5b0a4"
+  subtle: "#8a8478"
+  accent: "#E6A815"
+  accent_bar: "#ff8000"
+  email_bg: "#0e1014"
+  email_border: "#3a3428"
+  eyebrow: "#E6A815"
+  step_accent: "#ff8000"
+  button_bg: "#E6A815"
+  button_text: "#0A0604"
+  link: "#ff8000"
+  footer_muted: "#8a8478"
+  divider_border: "#3a3428"
+  card_shadow: "0 8px 32px rgba(0, 0, 0, 0.35)"
+  provider_hover: "0 6px 18px rgba(0, 0, 0, 0.28)"
+fonts:
+  eyebrow: "'IBM Plex Mono',ui-monospace,Consolas,monospace"
+  heading: "Archivo,'Source Sans 3',Segoe UI,Helvetica,Arial,sans-serif"
+  body: "'Source Sans 3',Segoe UI,Helvetica,Arial,sans-serif"
+brand:
+  product_name: Solomon
+  tagline: Zion for inference. Brawler for agents. One account.
+copy:
+  invite:
+    title: You have been invited to Zion and Brawler
+    preheader: "You were invited to Solomon for {{ .Email }}. One sign-in opens Zion and Brawler."
+    eyebrow: Zion · Brawler
+    intro: "You&rsquo;ve been invited to a Solomon account. Use the button below to continue&mdash;on the next page you&rsquo;ll sign in with Google or GitHub. That sign-in opens both Zion, the inference API, and Brawler, the agent workspace."
+    step1: Open your personal invitation link.
+    step2: "Sign in with Google or GitHub using {{ .Email }}."
+    step3: Use Zion for inference and Brawler for agents with the same account.
+    footer: "Solomon sent this invitation to {{ .Email }} for Zion and Brawler. The link is for that address only. If you weren&rsquo;t expecting access, you can ignore this email&mdash;no account will be created without your sign-in."
+  accept_invite:
+    title: Accept invitation — Zion and Brawler
+    eyebrow: Zion · Brawler
+    lead: "You opened a valid Solomon invitation. Sign in with a provider that uses the email below. The same account opens Zion and Brawler, then returns you to the app you started from."
+    step1: Choose Google or GitHub.
+    step2: Confirm access with your identity provider.
+    step3: Continue in Zion or Brawler with this account.
+    footer: This page completes your Solomon invitation for Zion and Brawler. If you didn&rsquo;t expect access, close this window.
+  whitelist_confirmation:
+    title: Confirm your Zion and Brawler access request
+    preheader: "Confirm the Solomon access request for {{ .Email }}. One confirmation covers Zion and Brawler."
+    eyebrow: Zion · Brawler
+    intro: Someone used this email address to request access to Solomon. Confirm it so a project admin can review access to both Zion and Brawler.
+    footer: "Solomon sent this message because {{ .Email }} was used to request access to Zion and Brawler. The link is for that address only. If you did not ask for this, you can ignore this email&mdash;no request will be recorded without your confirmation."
+  whitelist_confirmed:
+    title: Access request recorded — Zion and Brawler
+    eyebrow: Zion · Brawler
+    headline: Access request recorded
+    lead: Your Solomon access request was recorded for Zion and Brawler. A project admin reviews it from here.
+    footer: "This page confirms the Solomon request for {{ .Email }}, covering Zion and Brawler. If you did not ask for access, you can close this window."

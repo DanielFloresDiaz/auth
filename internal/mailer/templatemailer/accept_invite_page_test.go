@@ -19,8 +19,8 @@ func TestDefaultAcceptInviteTemplateParses(t *testing.T) {
 	require.Contains(t, authtemplates.DefaultAcceptInviteHTML, "{{ css .Theme.Colors.PageBg }}")
 }
 
-func TestBrawlerThemeAcceptInviteRenders(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "templates", "brawler", projectThemeFileName))
+func TestSolomonThemeAcceptInviteRenders(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "templates", "solomon", projectThemeFileName))
 	require.NoError(t, err)
 	var partial ProjectTheme
 	require.NoError(t, yaml.Unmarshal(raw, &partial))
@@ -31,6 +31,9 @@ func TestBrawlerThemeAcceptInviteRenders(t *testing.T) {
 		Email: "dev@example.com",
 		Theme: mergeProjectTheme(DefaultProjectTheme(), partial),
 	}))
-	require.Contains(t, buf.String(), "Brawler")
-	require.Contains(t, buf.String(), "#ff8000")
+	body := buf.String()
+	require.Contains(t, body, "Zion")
+	require.Contains(t, body, "Brawler")
+	require.Contains(t, body, "#E6A815")
+	require.Contains(t, body, "#ff8000")
 }

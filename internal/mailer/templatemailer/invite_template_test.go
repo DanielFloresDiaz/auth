@@ -96,7 +96,7 @@ copy:
 
 func TestEmbeddedProductThemesLoadFromRepo(t *testing.T) {
 	dir := filepath.Join("..", "..", "..", "templates")
-	for _, slug := range []string{"brawler", "zion", "iec"} {
+	for _, slug := range []string{"solomon", "iec"} {
 		raw, err := os.ReadFile(filepath.Join(dir, slug, projectThemeFileName)) // #nosec G304 -- reads known embedded theme fixtures from repo templates/
 		require.NoError(t, err, slug)
 		var partial ProjectTheme
