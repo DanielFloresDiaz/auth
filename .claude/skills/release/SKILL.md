@@ -81,6 +81,19 @@ Every command must pass. Fix vet, staticcheck, gosec, and govulncheck findings, 
 
 Report the range and commit count, the grouped summary, the version and date, the files changed, the README, docs, and openapi updates, the gate results (tests skipped unless requested), and the follow-ups (solomon records the new submodule SHA, and migration copies in other repos). Do not commit, tag, or push unless asked. When the user does ask, tag `v<version>` on **master**.
 
+### Pull request title and summary
+
+Always finish the deliverable with a ready-to-paste text for the release pull request (the source branch of the range from section 1 into its target). The user copies it into GitHub, so do not open the PR yourself. Give it as two separate fenced `markdown` blocks, one labelled **PR title** and one labelled **PR summary**, so each copies in one click.
+
+- **PR title:** one line, 70 characters or fewer, in the form `Release v<version>: <the one or two headline changes>`. No trailing period.
+- **PR summary:** written for reviewers, from the changelog and the actual diff, not from memory:
+  - `## Summary`: two or three sentences on what ships and why it matters.
+  - `## Changes`: the changelog bullets, grouped by area, consumer-facing items only.
+  - `## Breaking changes / migration`: what downstream repos or operators must do. Omit the section when there is nothing.
+  - `## Release checklist`: the version, the files that carry it, and each readiness check marked pass, fixed, or skipped (with the reason). Never mark a check as passed that was not run.
+  - `## Follow-ups`: the steps that happen after the merge (tag, downstream pin bumps, submodule SHAs).
+- Keep the title and summary consistent with `changelogs/v<version>.md`: same version, same facts. If there is no release (a no-op delta), say so instead and give no PR text.
+
 ## Release rules
 
 Release-specific rules the user has set for this repository. They override the steps above. Use the format `- YYYY-MM-DD: <rule>. <reason, if given>`.
